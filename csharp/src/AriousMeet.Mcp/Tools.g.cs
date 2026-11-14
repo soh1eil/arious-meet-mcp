@@ -87,6 +87,7 @@ internal static class ToolTraitsTable
         ["rename_self"] = new(false, false, false, true),
         ["set_name_style"] = new(false, false, false, true),
         ["send_typing"] = new(false, false, false, true),
+        ["send_chat_action"] = new(false, false, false, true),
         ["add_contact"] = new(false, false, false, true),
         ["set_contact_nickname"] = new(false, false, false, true),
         ["ring"] = new(true, true, false, false),
@@ -134,6 +135,8 @@ internal static class ToolTraitsTable
         ["set_org_folder_access"] = new(false, false, false, true),
         ["list_emoji_packs"] = new(false, false, false, true),
         ["get_user_profile"] = new(false, false, false, true),
+        ["search_gifs"] = new(false, false, false, true),
+        ["send_gif"] = new(true, true, false, false),
     };
 
     public static bool TryGet(string name, out ToolTraits traits) => Table.TryGetValue(name, out traits);
@@ -1575,15 +1578,31 @@ public sealed partial class McpClient
     }
 
     /// <summary>
-    /// Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character.
+    /// Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
     /// </summary>
     /// <param name="conversationId"></param>
+    /// <param name="action">What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on. One of: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location, cancel.</param>
     /// <param name="ct">Cancellation token.</param>
-    public Task<ToolResult> SendTypingAsync(string conversationId, CancellationToken ct = default)
+    public Task<ToolResult> SendTypingAsync(string conversationId, ChatAction? action = null, CancellationToken ct = default)
     {
         var a = new JsonObject();
         Put(a, "conversation_id", conversationId);
+        Put(a, "action", action);
         return CallToolAsync("send_typing", a, true, ct);
+    }
+
+    /// <summary>
+    /// Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.
+    /// </summary>
+    /// <param name="action">What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on. One of: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location, cancel.</param>
+    /// <param name="conversationId"></param>
+    /// <param name="ct">Cancellation token.</param>
+    public Task<ToolResult> SendChatActionAsync(ChatAction action, string conversationId, CancellationToken ct = default)
+    {
+        var a = new JsonObject();
+        Put(a, "action", action);
+        Put(a, "conversation_id", conversationId);
+        return CallToolAsync("send_chat_action", a, true, ct);
     }
 
     /// <summary>
@@ -2315,6 +2334,44 @@ public sealed partial class McpClient
         Put(a, "user_id", userId);
         Put(a, "username", username);
         return CallToolAsync("get_user_profile", a, true, ct);
+    }
+
+    /// <summary>
+    /// Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.
+    /// </summary>
+    /// <param name="limit">How many results, default 10.</param>
+    /// <param name="query">What to look for. Empty or omitted = trending.</param>
+    /// <param name="ct">Cancellation token.</param>
+    public Task<ToolResult> SearchGifsAsync(long? limit = null, string? query = null, CancellationToken ct = default)
+    {
+        var a = new JsonObject();
+        Put(a, "limit", limit);
+        Put(a, "query", query);
+        return CallToolAsync("search_gifs", a, true, ct);
+    }
+
+    /// <summary>
+    /// Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's "send stickers and GIFs" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.
+    /// </summary>
+    /// <param name="conversationId"></param>
+    /// <param name="gifId">A gif_id from search_gifs.</param>
+    /// <param name="caption"></param>
+    /// <param name="modelName">Your real model name, e.g. "Claude Sonnet 5".</param>
+    /// <param name="replyToId"></param>
+    /// <param name="silent">Send with no sound.</param>
+    /// <param name="topicId">Optional: "general" or an id from list_topics. A reply goes into the topic of the message it answers.</param>
+    /// <param name="ct">Cancellation token.</param>
+    public Task<ToolResult> SendGifAsync(string conversationId, string gifId, string? caption = null, string? modelName = null, string? replyToId = null, bool? silent = null, string? topicId = null, CancellationToken ct = default)
+    {
+        var a = new JsonObject();
+        Put(a, "conversation_id", conversationId);
+        Put(a, "gif_id", gifId);
+        Put(a, "caption", caption);
+        Put(a, "model_name", modelName);
+        Put(a, "reply_to_id", replyToId);
+        Put(a, "silent", silent);
+        Put(a, "topic_id", topicId);
+        return CallToolAsync("send_gif", a, true, ct);
     }
 
 }

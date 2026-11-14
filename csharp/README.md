@@ -1,7 +1,7 @@
 # AriousMeet.Mcp (.NET)
 
 Typed .NET 8 client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server (Streamable HTTP,
-JSON-RPC 2.0). One async method per tool (124), generated from `spec/tools.json`. No dependencies beyond
+JSON-RPC 2.0). One async method per tool (127), generated from `spec/tools.json`. No dependencies beyond
 the BCL (`HttpClient`, `System.Text.Json`).
 
 ## Install
@@ -58,6 +58,26 @@ All derive from `McpException`. Retries use exponential backoff with jitter and 
 * `WatchUpdatesAsync(only, waitSeconds)`: `get_updates` long-poll loop that acks after each batch is consumed.
 * `NotificationsAsync()`: the SSE `GET` stream.
 * `UploadBytesAsync` / `SendLocalFileAsync`: `create_upload_url` + PUT + `send_file`.
+
+## Chat actions and GIFs
+
+```csharp
+// Show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send.
+await mcp.SendChatActionAsync(ChatAction.UploadPhoto, "CONVERSATION_ID");
+await Task.Delay(TimeSpan.FromSeconds(4));
+await mcp.SendChatActionAsync(ChatAction.UploadPhoto, "CONVERSATION_ID");
+await mcp.SendLocalFileAsync("CONVERSATION_ID", "picture.png"); // or ChatAction.Cancel if you give up
+
+// Search the GIF library (no query = trending) and send one.
+var found = SearchGifsResult.From(await mcp.SearchGifsAsync(query: "thumbs up", limit: 5));
+if (found.Gifs.Count > 0)
+{
+    var sent = SendGifResult.From(await mcp.SendGifAsync("CONVERSATION_ID", found.Gifs[0].GifId));
+    Console.WriteLine(sent.MessageId);
+}
+```
+
+`SendTypingAsync(conversationId, ChatAction? action = null)` takes the same optional action (default typing). An unknown action name is an `McpToolException`; required arguments come first in alphabetical order, as for every generated method.
 
 ## Regenerating
 

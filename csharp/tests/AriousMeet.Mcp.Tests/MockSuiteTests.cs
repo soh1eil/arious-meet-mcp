@@ -8,17 +8,17 @@ public class MockSuiteTests
     [Theory]
     [InlineData("json")]
     [InlineData("sse")]
-    public async Task HandshakeListsAll124Tools(string mode)
+    public async Task HandshakeListsAll127Tools(string mode)
     {
         using var m = MockServer.Start(mode);
         using var c = m.Client();
         var info = await c.InitializeAsync();
         Assert.NotNull(info["serverInfo"]);
         var tools = await c.ListToolsAsync();
-        Assert.Equal(124, tools.Count);
+        Assert.Equal(127, tools.Count);
         var names = tools.Select(t => (string)t["name"]!).ToHashSet();
         Assert.All(McpClient.ToolNames, n => Assert.Contains(n, names));
-        Assert.Equal(124, McpClient.ToolNames.Count);
+        Assert.Equal(127, McpClient.ToolNames.Count);
     }
 
     [Theory]
@@ -231,5 +231,71 @@ public class MockSuiteTests
     {
         Assert.Equal(["a\nb", "c"], SseParser.ParseAll(": hi\n\ndata: a\ndata: b\n\ndata:c\n\n"));
         Assert.Equal(["tail"], SseParser.ParseAll("data: tail"));
+    }
+
+    [Theory]
+    [InlineData("json")]
+    [InlineData("sse")]
+    public async Task ChatActionsAndTyping(string mode)
+    {
+        using var m = MockServer.Start(mode);
+        using var c = m.Client();
+        var conv = "conv-act-" + mode;
+        Assert.Equal(11, Enum.GetValues<ChatAction>().Length);
+        Assert.Equal("upload_video_note", ChatAction.UploadVideoNote.ToWire());
+        await c.SendChatActionAsync(ChatAction.UploadPhoto, conv);
+        await c.SendChatActionAsync(ChatAction.Cancel, conv);
+        await c.SendTypingAsync(conv); // backward compatible: no action means typing
+        await c.SendTypingAsync(conv, ChatAction.RecordVoice);
+        var mine = (await m.ActionsAsync()).Where(a => a.Conversation == conv).Select(a => a.Action).ToArray();
+        Assert.Equal(new[] { "upload_photo", "cancel", "typing", "record_voice" }, mine);
+    }
+
+    [Fact]
+    public async Task UnknownChatActionIsToolError()
+    {
+        using var m = MockServer.Start();
+        using var c = m.Client();
+        // a value outside the enum never reaches the wire
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => c.SendChatActionAsync((ChatAction)99, "conv-bad"));
+        // a raw unknown name is refused by the server
+        var raw = await Assert.ThrowsAsync<McpToolException>(
+            () => c.CallToolAsync("send_chat_action", new JsonObject { ["conversation_id"] = "c", ["action"] = "dance" }));
+        Assert.Contains("unknown action", raw.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SearchAndSendGifTypedResults()
+    {
+        using var m = MockServer.Start();
+        using var c = m.Client();
+        var trending = SearchGifsResult.From(await c.SearchGifsAsync());
+        Assert.Equal(6, trending.Gifs.Count);
+        Assert.False(trending.Busy);
+        var found = SearchGifsResult.From(await c.SearchGifsAsync(limit: 1, query: "thumbs up"));
+        var g = Assert.Single(found.Gifs);
+        Assert.Equal("gif-001", g.GifId);
+        Assert.Equal(480, g.Width);
+        Assert.Equal("image/gif", g.ContentType);
+        Assert.Equal("library", g.Source);
+        Assert.StartsWith("http", g.PreviewUrl, StringComparison.Ordinal);
+        Assert.True(SearchGifsResult.From(await c.SearchGifsAsync(query: "busy")).Busy);
+        var sent = SendGifResult.From(await c.SendGifAsync("conv-gif", "gif-001", caption: "nice", silent: true));
+        Assert.Equal("gif-001", sent.GifId);
+        Assert.Equal("conv-gif", sent.ConversationId);
+        Assert.StartsWith("msg-gif-", sent.MessageId, StringComparison.Ordinal);
+        Assert.StartsWith("att-gif-", sent.AttachmentId, StringComparison.Ordinal);
+        Assert.Null(sent.SentViaGrantName);
+    }
+
+    [Fact]
+    public async Task GifErrors()
+    {
+        using var m = MockServer.Start();
+        using var c = m.Client();
+        await Assert.ThrowsAsync<McpToolException>(() => c.SearchGifsAsync(limit: 26));
+        await Assert.ThrowsAsync<McpToolException>(() => c.SendGifAsync("c", "nope"));
+        using var bare = m.Client(model: null);
+        await Assert.ThrowsAsync<ArgumentException>(() => bare.SendGifAsync("c", "gif-001"));
     }
 }

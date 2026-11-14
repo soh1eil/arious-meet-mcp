@@ -74,6 +74,13 @@ public sealed class MockServer : IDisposable
         return (JsonArray)JsonNode.Parse(s)!["log"]!;
     }
 
+    public async Task<IReadOnlyList<(string Conversation, string Action)>> ActionsAsync()
+    {
+        var s = await Http.GetStringAsync(Origin + "/__mock/log");
+        var arr = (JsonArray)JsonNode.Parse(s)!["actions"]!;
+        return arr.Select(a => ((string)a!["conversation_id"]!, (string)a!["action"]!)).ToList();
+    }
+
     public async Task PushAsync(string token, string itemsJson)
     {
         var body = $"{{\"token\":\"{token}\",\"items\":{itemsJson}}}";

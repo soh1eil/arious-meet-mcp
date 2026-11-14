@@ -12,7 +12,7 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
     <PackageId>AriousMeet.Mcp</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Arious Meet</Authors>
     <Description>Typed .NET client for the Arious Meet MCP server (Streamable HTTP), with generated wrappers for every tool.</Description>
     <PackageTags>mcp;agents;arious-meet;client;ai</PackageTags>

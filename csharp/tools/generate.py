@@ -32,8 +32,15 @@ def camel(s):
     return "@" + c if c in KEYWORDS else c
 
 
+CHAT_ACTIONS = ["typing", "upload_photo", "upload_video", "record_voice", "upload_voice",
+                "upload_document", "record_video_note", "upload_video_note", "choose_sticker",
+                "find_location", "cancel"]
+
+
 def ctype(sch, nullable):
     t = sch.get("type")
+    if sch.get("enum") == CHAT_ACTIONS:
+        return "ChatAction" + ("?" if nullable else "")
     value = {"integer": "long", "number": "double", "boolean": "bool"}.get(t)
     if value:
         return value + ("?" if nullable else "")

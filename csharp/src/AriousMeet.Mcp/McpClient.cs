@@ -40,7 +40,7 @@ public sealed class McpClientOptions
 public sealed partial class McpClient : IDisposable
 {
     public const string ProtocolVersion = "2025-06-18";
-    private const string SdkVersion = "0.1.0";
+    private const string SdkVersion = "0.2.0";
 
     private readonly McpClientOptions _o;
     private readonly string _token;
