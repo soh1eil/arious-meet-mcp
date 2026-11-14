@@ -94,6 +94,7 @@ public abstract class ToolsBase {
     TRAITS.put("rename_self", new Traits(false, false, false, true));
     TRAITS.put("set_name_style", new Traits(false, false, false, true));
     TRAITS.put("send_typing", new Traits(false, false, false, true));
+    TRAITS.put("send_chat_action", new Traits(false, false, false, true));
     TRAITS.put("add_contact", new Traits(false, false, false, true));
     TRAITS.put("set_contact_nickname", new Traits(false, false, false, true));
     TRAITS.put("ring", new Traits(true, true, false, false));
@@ -141,6 +142,8 @@ public abstract class ToolsBase {
     TRAITS.put("set_org_folder_access", new Traits(false, false, false, true));
     TRAITS.put("list_emoji_packs", new Traits(false, false, false, true));
     TRAITS.put("get_user_profile", new Traits(false, false, false, true));
+    TRAITS.put("search_gifs", new Traits(false, false, false, true));
+    TRAITS.put("send_gif", new Traits(true, true, false, false));
   }
 
   static Traits traits(String name) {
@@ -2245,17 +2248,58 @@ public abstract class ToolsBase {
   }
 
   /**
-   * Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character.
+   * Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
    *
    * <p>Tool: {@code send_typing}.
    *
    * @param conversationId required
+   * @param options optional arguments (all nullable), by JSON name:
+   *     {@code action} (ChatAction) What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on. One of: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location, cancel.
    * @return the tool result; throws {@link McpException.Tool} when the tool answers isError
    */
   public ToolResult sendTyping(String conversationId) {
     Map<String, Object> a = new LinkedHashMap<>();
     a.put("conversation_id", conversationId);
     return callTool("send_typing", a);
+  }
+
+  /**
+   * Same as {@link #sendTyping} with optional arguments.
+   *
+   * @param options optional arguments by JSON name (see the other overload)
+   */
+  public ToolResult sendTyping(String conversationId, Map<String, Object> options) {
+    Map<String, Object> a = new LinkedHashMap<>();
+    a.put("conversation_id", conversationId);
+    if (options != null) {
+      a.putAll(options);
+    }
+    return callTool("send_typing", a);
+  }
+
+  /**
+   * Same as {@link #sendTyping} with the optional chat {@code action} as a typed enum.
+   *
+   * @param action What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+   */
+  public ToolResult sendTyping(String conversationId, ChatAction action) {
+    return sendTyping(conversationId, Map.of("action", action.wire()));
+  }
+
+  /**
+   * Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.
+   *
+   * <p>Tool: {@code send_chat_action}.
+   *
+   * @param action What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+   * @param conversationId required
+   * @return the tool result; throws {@link McpException.Tool} when the tool answers isError
+   */
+  public ToolResult sendChatAction(ChatAction action, String conversationId) {
+    Map<String, Object> a = new LinkedHashMap<>();
+    a.put("action", action.wire());
+    a.put("conversation_id", conversationId);
+    return callTool("send_chat_action", a);
   }
 
   /**
@@ -3397,6 +3441,71 @@ public abstract class ToolsBase {
       a.putAll(options);
     }
     return callTool("get_user_profile", a);
+  }
+
+  /**
+   * Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.
+   *
+   * <p>Tool: {@code search_gifs}.
+   *
+   * @param options optional arguments (all nullable), by JSON name:
+   *     {@code limit} (long) How many results, default 10.
+   *     {@code query} (String) What to look for. Empty or omitted = trending.
+   * @return the tool result; throws {@link McpException.Tool} when the tool answers isError
+   */
+  public ToolResult searchGifs() {
+    Map<String, Object> a = new LinkedHashMap<>();
+    return callTool("search_gifs", a);
+  }
+
+  /**
+   * Same as {@link #searchGifs} with optional arguments.
+   *
+   * @param options optional arguments by JSON name (see the other overload)
+   */
+  public ToolResult searchGifs(Map<String, Object> options) {
+    Map<String, Object> a = new LinkedHashMap<>();
+    if (options != null) {
+      a.putAll(options);
+    }
+    return callTool("search_gifs", a);
+  }
+
+  /**
+   * Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's "send stickers and GIFs" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.
+   *
+   * <p>Tool: {@code send_gif}.
+   *
+   * @param conversationId required
+   * @param gifId A gif_id from search_gifs.
+   * @param options optional arguments (all nullable), by JSON name:
+   *     {@code caption} (String) 
+   *     {@code model_name} (String) Your real model name, e.g. "Claude Sonnet 5".
+   *     {@code reply_to_id} (String) 
+   *     {@code silent} (boolean) Send with no sound.
+   *     {@code topic_id} (String) Optional: "general" or an id from list_topics. A reply goes into the topic of the message it answers.
+   * @return the tool result; throws {@link McpException.Tool} when the tool answers isError
+   */
+  public ToolResult sendGif(String conversationId, String gifId) {
+    Map<String, Object> a = new LinkedHashMap<>();
+    a.put("conversation_id", conversationId);
+    a.put("gif_id", gifId);
+    return callTool("send_gif", a);
+  }
+
+  /**
+   * Same as {@link #sendGif} with optional arguments.
+   *
+   * @param options optional arguments by JSON name (see the other overload)
+   */
+  public ToolResult sendGif(String conversationId, String gifId, Map<String, Object> options) {
+    Map<String, Object> a = new LinkedHashMap<>();
+    a.put("conversation_id", conversationId);
+    a.put("gif_id", gifId);
+    if (options != null) {
+      a.putAll(options);
+    }
+    return callTool("send_gif", a);
   }
 
 }

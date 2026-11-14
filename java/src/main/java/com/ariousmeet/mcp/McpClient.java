@@ -36,7 +36,7 @@ import java.util.function.Predicate;
 public final class McpClient extends ToolsBase implements AutoCloseable {
   public static final String DEFAULT_BASE_URL = "https://api.ariousmeet.com/v1/mcp";
   public static final String PROTOCOL_VERSION = "2025-06-18";
-  private static final String SDK_VERSION = "0.1.0";
+  private static final String SDK_VERSION = "0.2.0";
   static final ObjectMapper JSON = new ObjectMapper();
 
   private final String token;

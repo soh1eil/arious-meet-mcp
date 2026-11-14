@@ -24,6 +24,15 @@ RESERVED_METHODS = {
 }
 
 
+CHAT_ACTIONS = ["typing", "upload_photo", "upload_video", "record_voice", "upload_voice",
+                "upload_document", "record_video_note", "upload_video_note", "choose_sticker",
+                "find_location", "cancel"]
+
+
+def is_action(sch):
+    return sch.get("enum") == CHAT_ACTIONS
+
+
 def camel(s):
     parts = s.split("_")
     return parts[0] + "".join(p[:1].upper() + p[1:] for p in parts[1:])
@@ -36,6 +45,8 @@ def pname(s):
 
 def jtype(sch):
     t = sch.get("type")
+    if is_action(sch):
+        return "ChatAction"
     if t == "string":
         return "String"
     if t == "integer":
@@ -135,7 +146,7 @@ def main():
             if props:
                 b.append(indent + "Map<String, Object> a = new LinkedHashMap<>();")
                 for k in req:
-                    b.append(indent + 'a.put("%s", %s);' % (k, pname(k)))
+                    b.append(indent + 'a.put("%s", %s);' % (k, pname(k) + (".wire()" if is_action(props[k]) else "")))
                 if opts_expr:
                     b.append(indent + "if (options != null) {")
                     b.append(indent + "  a.putAll(options);")
@@ -157,6 +168,15 @@ def main():
             o.extend(body(True))
             o.append("  }")
             o.append("")
+        for k in opt:
+            if is_action(props[k]):
+                # typed enum overload for an optional chat action (backward compatible: the old overloads stay)
+                o.extend(doc(["Same as {@link #%s} with the optional chat {@code %s} as a typed enum." % (m, k), "",
+                              "@param %s %s" % (pname(k), esc(props[k].get("description", "")))]))
+                o.append("  public ToolResult %s(%s) {" % (m, ", ".join(params + ["ChatAction %s" % pname(k)])))
+                o.append("    return %s(%s);" % (m, ", ".join(names + ['Map.of("%s", %s.wire())' % (k, pname(k))])))
+                o.append("  }")
+                o.append("")
     o.append("}")
     OUT.write_text("\n".join(o) + "\n")
     print("wrote", OUT, len(tools), "tools")

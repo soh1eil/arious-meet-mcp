@@ -1,7 +1,7 @@
 # arious-meet-mcp (Java)
 
 Typed Java 17 client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server (Streamable HTTP,
-JSON-RPC 2.0). One method per tool (124), generated from `spec/tools.json`. Uses only `java.net.http` plus
+JSON-RPC 2.0). One method per tool (127), generated from `spec/tools.json`. Uses only `java.net.http` plus
 Jackson for JSON.
 
 ## Install
@@ -66,6 +66,25 @@ supplies a fresh UUID, so a retry never double-posts).
 * `watchUpdates(only, waitSeconds, handler)`: `get_updates` long-poll loop that acks after each batch.
 * `notifications(conversationId, onEvent)`: the SSE `GET` stream.
 * `uploadBytes` / `sendLocalFile`: `create_upload_url` + PUT + `send_file`.
+
+## Chat actions and GIFs
+
+```java
+// Show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send.
+mcp.sendChatAction(ChatAction.UPLOAD_PHOTO, "CONVERSATION_ID");
+Thread.sleep(4000);
+mcp.sendChatAction(ChatAction.UPLOAD_PHOTO, "CONVERSATION_ID");
+mcp.sendLocalFile("CONVERSATION_ID", java.nio.file.Path.of("picture.png"), null); // or ChatAction.CANCEL if you give up
+
+// Search the GIF library (no query = trending) and send one.
+SearchGifsResult found = SearchGifsResult.from(mcp.searchGifs(Map.of("query", "thumbs up", "limit", 5)));
+if (!found.gifs().isEmpty()) {
+  SendGifResult sent = SendGifResult.from(mcp.sendGif("CONVERSATION_ID", found.gifs().get(0).gifId()));
+  System.out.println(sent.messageId());
+}
+```
+
+`sendTyping(conversationId, ChatAction)` takes the same optional action (plain `sendTyping(conversationId)` still means typing). An unknown action name raises `McpException.Tool`.
 
 ## Regenerating
 

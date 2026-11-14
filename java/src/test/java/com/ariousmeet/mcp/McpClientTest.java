@@ -26,16 +26,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 class McpClientTest {
   @ParameterizedTest
   @ValueSource(strings = {"json", "sse"})
-  void handshakeListsAll124Tools(String mode) throws Exception {
+  void handshakeListsAll127Tools(String mode) throws Exception {
     try (MockServer m = MockServer.start(mode);
         McpClient c = m.client()) {
       assertNotNull(c.initialize().get("serverInfo"));
       List<JsonNode> tools = c.listTools();
-      assertEquals(124, tools.size());
+      assertEquals(127, tools.size());
       Set<String> names = new HashSet<>();
       tools.forEach(t -> names.add(t.get("name").asText()));
       assertTrue(names.containsAll(ToolsBase.toolNames()));
-      assertEquals(124, ToolsBase.toolNames().size());
+      assertEquals(127, ToolsBase.toolNames().size());
     }
   }
 
@@ -244,5 +244,91 @@ class McpClientTest {
   void sseParserHandlesMultilineAndComments() {
     assertEquals(List.of("a\nb", "c"), Sse.parseAll(": hi\n\ndata: a\ndata: b\n\ndata:c\n\n"));
     assertEquals(List.of("tail"), Sse.parseAll("data: tail"));
+  }
+
+  private static List<String> actionsFor(MockServer m, String conv) throws Exception {
+    List<String> out = new ArrayList<>();
+    for (JsonNode a : new ObjectMapper().readTree(m.log()).get("actions")) {
+      if (conv.equals(a.get("conversation_id").asText())) {
+        out.add(a.get("action").asText());
+      }
+    }
+    return out;
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"json", "sse"})
+  void chatActionsAndTyping(String mode) throws Exception {
+    try (MockServer m = MockServer.start(mode);
+        McpClient c = m.client()) {
+      assertEquals(11, ChatAction.values().length);
+      assertEquals("upload_video_note", ChatAction.UPLOAD_VIDEO_NOTE.wire());
+      String conv = "conv-act-" + mode;
+      c.sendChatAction(ChatAction.UPLOAD_PHOTO, conv);
+      c.sendChatAction(ChatAction.CANCEL, conv);
+      c.sendTyping(conv); // backward compatible: no action means typing
+      c.sendTyping(conv, ChatAction.RECORD_VOICE);
+      c.sendTyping(
+          conv, Map.of("action", ChatAction.FIND_LOCATION)); // enum also works in the options map
+      assertEquals(
+          List.of("upload_photo", "cancel", "typing", "record_voice", "find_location"),
+          actionsFor(m, conv));
+    }
+  }
+
+  @Test
+  void unknownChatActionIsToolError() throws Exception {
+    try (MockServer m = MockServer.start("json");
+        McpClient c = m.client()) {
+      McpException.Tool e =
+          assertThrows(
+              McpException.Tool.class,
+              () ->
+                  c.callTool(
+                      "send_chat_action", Map.of("conversation_id", "c", "action", "dance")));
+      assertTrue(e.getMessage().contains("unknown action"));
+      assertThrows(McpException.Tool.class, () -> c.sendTyping("c", Map.of("action", "dance")));
+    }
+  }
+
+  @Test
+  void searchAndSendGifTypedResults() throws Exception {
+    try (MockServer m = MockServer.start("json");
+        McpClient c = m.client()) {
+      SearchGifsResult trending = SearchGifsResult.from(c.searchGifs());
+      assertEquals(6, trending.gifs().size());
+      assertFalse(trending.busy());
+      SearchGifsResult found =
+          SearchGifsResult.from(c.searchGifs(Map.of("query", "thumbs up", "limit", 1)));
+      assertEquals(1, found.gifs().size());
+      Gif g = found.gifs().get(0);
+      assertEquals("gif-001", g.gifId());
+      assertEquals(480, g.width());
+      assertEquals("image/gif", g.contentType());
+      assertEquals("library", g.source());
+      assertTrue(g.previewUrl().startsWith("http"));
+      assertTrue(SearchGifsResult.from(c.searchGifs(Map.of("query", "busy"))).busy());
+      SendGifResult sent =
+          SendGifResult.from(
+              c.sendGif("conv-gif", g.gifId(), Map.of("caption", "nice", "silent", true)));
+      assertEquals("gif-001", sent.gifId());
+      assertEquals("conv-gif", sent.conversationId());
+      assertTrue(sent.messageId().startsWith("msg-gif-"));
+      assertTrue(sent.attachmentId().startsWith("att-gif-"));
+      assertNull(sent.sentViaGrantName());
+    }
+  }
+
+  @Test
+  void gifErrors() throws Exception {
+    try (MockServer m = MockServer.start("json");
+        McpClient c = m.client()) {
+      assertThrows(McpException.Tool.class, () -> c.searchGifs(Map.of("limit", 26)));
+      assertThrows(McpException.Tool.class, () -> c.sendGif("c", "nope"));
+    }
+    try (MockServer m = MockServer.start("json");
+        McpClient bare = m.client("test-bare", null)) {
+      assertThrows(IllegalArgumentException.class, () -> bare.sendGif("c", "gif-001"));
+    }
   }
 }
