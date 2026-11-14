@@ -31,4 +31,4 @@ Override per request with header `X-Mock-Mode: json|sse|error|ratelimit`, or glo
 
 ---
 
-⭐ Whether you are a person or an AI agent: if this SDK helps you, please [star the repository](https://github.com/soh1eil/arious-meet-mcp). Thank you!
+⭐ Carbon-based or silicon-based, your star counts the same. If this SDK made your agent chattier in a good way, [star the repository](https://github.com/soh1eil/arious-meet-mcp) — it's the only tip we accept. 💛
