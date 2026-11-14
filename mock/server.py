@@ -71,7 +71,7 @@ def call_tool(token, name, args, base):
         text = "# Handbook\nsection: %s" % sec if sec else "# Handbook\nfull"
         return {"content": [{"type": "text", "text": text}]}
     if name == "search_app_guide":
-        if "query" not in args:
+        if not args.get("query"):
             return tool_error("query is required")
         return struct_result({"results": [{"title": "Guide", "snippet": args["query"]}]})
     if name == "list_organizations":
