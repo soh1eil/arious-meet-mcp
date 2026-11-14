@@ -19,7 +19,7 @@ print(client.whoami().data)
 for conv in client.list_conversations().data["conversations"]:
     print(conv["id"], conv.get("title"))
 
-client.send_message("CONVERSATION_ID", "Hello from the SDK")   # signed with model_name automatically
+client.send_message("CONVERSATION_ID", "Hello from the SDK")  # signed with model_name automatically
 
 for update in client.watch_updates(only=["mention", "direct_message"]):  # long-poll loop with ack
     print(update)
