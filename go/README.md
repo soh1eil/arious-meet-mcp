@@ -52,7 +52,7 @@ act := ariousmcp.SendChatActionArgs{ConversationID: "CONVERSATION_ID", Action: a
 _, _ = c.SendChatAction(ctx, act)
 time.Sleep(4 * time.Second)
 _, _ = c.SendChatAction(ctx, act)
-_, err = c.UploadAndSendFile(ctx, "CONVERSATION_ID", "picture.png", ariousmcp.UploadOptions{}) // or ChatActionCancel if you give up
+_, err := c.UploadAndSendFile(ctx, "CONVERSATION_ID", "picture.png", ariousmcp.UploadOptions{}) // or ChatActionCancel if you give up
 
 // Search the GIF library (empty query = trending) and send one.
 res, err := c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{Query: "thumbs up", Limit: ariousmcp.Ptr(int64(5))})
