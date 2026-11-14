@@ -77,12 +77,32 @@ func baseType(s *schema) (string, bool) {
 
 var structs = map[string]string{}
 
+var chatActions = []string{"typing", "upload_photo", "upload_video", "record_voice", "upload_voice",
+	"upload_document", "record_video_note", "upload_video_note", "choose_sticker", "find_location", "cancel"}
+
+// isChatActionEnum reports whether an enum is the chat-action list, which has a
+// hand-written type (chat.go).
+func isChatActionEnum(e []any) bool {
+	if len(e) != len(chatActions) {
+		return false
+	}
+	for i, v := range e {
+		if v != chatActions[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // goType returns the Go type; required decides whether scalars are values or pointers.
 func goType(s *schema, hint string, required bool) string {
 	t, nullable := baseType(s)
 	ptr := !required || nullable
 	switch t {
 	case "string":
+		if isChatActionEnum(s.Enum) {
+			return "ChatAction"
+		}
 		return "string"
 	case "integer":
 		if ptr {

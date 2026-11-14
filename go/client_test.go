@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -84,7 +85,7 @@ func TestHandshakeListAndTypedCalls(t *testing.T) {
 			ctx := context.Background()
 			c := mk(t, tok(), mode)
 			tools, err := c.ListTools(ctx)
-			if err != nil || len(tools) != 124 {
+			if err != nil || len(tools) != 127 {
 				t.Fatalf("tools=%d err=%v", len(tools), err)
 			}
 			if c.ServerInfo["name"] != "arious-agents" {
@@ -297,5 +298,132 @@ func TestUploadAndSend(t *testing.T) {
 	}
 	if _, err := c.UploadAndSend(ctx, "conv", []byte("x"), ariousmcp.UploadOptions{}); !errors.Is(err, ariousmcp.ErrConfig) {
 		t.Fatalf("want ErrConfig, got %v", err)
+	}
+}
+
+func mockActions(t *testing.T, conv string) []string {
+	t.Helper()
+	resp, err := http.Get(strings.Replace(mockURL, "/v1/mcp", "/__mock/log", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var log struct {
+		Actions []struct {
+			ConversationID string `json:"conversation_id"`
+			Action         string `json:"action"`
+		} `json:"actions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&log); err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, a := range log.Actions {
+		if a.ConversationID == conv {
+			out = append(out, a.Action)
+		}
+	}
+	return out
+}
+
+func TestChatActions(t *testing.T) {
+	ctx := context.Background()
+	for _, mode := range []string{"json", "sse"} {
+		c := mk(t, tok(), mode)
+		conv := "conv-act-" + mode
+		if len(ariousmcp.ChatActions()) != 11 || !ariousmcp.ChatActionCancel.Valid() || ariousmcp.ChatAction("dance").Valid() {
+			t.Fatal("ChatAction enum is wrong")
+		}
+		steps := []func() error{
+			func() error {
+				_, err := c.SendChatAction(ctx, ariousmcp.SendChatActionArgs{ConversationID: conv, Action: ariousmcp.ChatActionUploadPhoto})
+				return err
+			},
+			func() error {
+				_, err := c.SendChatAction(ctx, ariousmcp.SendChatActionArgs{ConversationID: conv, Action: ariousmcp.ChatActionCancel})
+				return err
+			},
+			func() error { // backward compatible: no action means typing
+				_, err := c.SendTyping(ctx, ariousmcp.SendTypingArgs{ConversationID: conv})
+				return err
+			},
+			func() error {
+				_, err := c.SendTyping(ctx, ariousmcp.SendTypingArgs{ConversationID: conv, Action: ariousmcp.ChatActionRecordVoice})
+				return err
+			},
+		}
+		for _, s := range steps {
+			if err := s(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := strings.Join(mockActions(t, conv), ","); got != "upload_photo,cancel,typing,record_voice" {
+			t.Fatalf("%s: %s", mode, got)
+		}
+	}
+}
+
+func TestUnknownChatActionIsToolError(t *testing.T) {
+	ctx := context.Background()
+	c := mk(t, tok(), "json")
+	var te *ariousmcp.ToolError
+	_, err := c.SendChatAction(ctx, ariousmcp.SendChatActionArgs{ConversationID: "conv-bad", Action: "dance"})
+	if !errors.As(err, &te) || !strings.Contains(te.Message, "unknown action") {
+		t.Fatalf("got %v", err)
+	}
+	if _, err = c.SendChatAction(ctx, ariousmcp.SendChatActionArgs{ConversationID: "conv-bad"}); !errors.As(err, &te) {
+		t.Fatalf("missing action: %v", err)
+	}
+}
+
+func TestSearchAndSendGif(t *testing.T) {
+	ctx := context.Background()
+	c := mk(t, tok(), "json")
+	r, err := c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trending, err := ariousmcp.DecodeSearchGifs(r)
+	if err != nil || len(trending.Gifs) != 6 || trending.Busy {
+		t.Fatalf("%+v %v", trending, err)
+	}
+	r, err = c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{Query: "thumbs up", Limit: ariousmcp.Ptr(int64(1))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found, _ := ariousmcp.DecodeSearchGifs(r)
+	if len(found.Gifs) != 1 || found.Gifs[0].GifID != "gif-001" || found.Gifs[0].Width != 480 ||
+		found.Gifs[0].ContentType != "image/gif" || found.Gifs[0].Source != "library" ||
+		!strings.HasPrefix(found.Gifs[0].PreviewURL, "http") {
+		t.Fatalf("%+v", found)
+	}
+	r, _ = c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{Query: "busy"})
+	if busy, _ := ariousmcp.DecodeSearchGifs(r); !busy.Busy {
+		t.Fatal("busy flag lost")
+	}
+	r, err = c.SendGif(ctx, ariousmcp.SendGifArgs{ConversationID: "conv-gif", GifID: "gif-001", Caption: "nice", Silent: ariousmcp.Ptr(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent, err := ariousmcp.DecodeSendGif(r)
+	if err != nil || sent.GifID != "gif-001" || sent.ConversationID != "conv-gif" ||
+		!strings.HasPrefix(sent.MessageID, "msg-gif-") || !strings.HasPrefix(sent.AttachmentID, "att-gif-") || sent.SentViaGrantName != "" {
+		t.Fatalf("%+v %v", sent, err)
+	}
+}
+
+func TestGifErrors(t *testing.T) {
+	ctx := context.Background()
+	c := mk(t, tok(), "json")
+	var te *ariousmcp.ToolError
+	if _, err := c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{Limit: ariousmcp.Ptr(int64(26))}); !errors.As(err, &te) {
+		t.Fatalf("limit: %v", err)
+	}
+	if _, err := c.SendGif(ctx, ariousmcp.SendGifArgs{ConversationID: "c", GifID: "nope"}); !errors.As(err, &te) {
+		t.Fatalf("gif id: %v", err)
+	}
+	bare, _ := ariousmcp.New(ariousmcp.WithToken("x"), ariousmcp.WithURL("http://127.0.0.1:1"))
+	if _, err := bare.SendGif(ctx, ariousmcp.SendGifArgs{ConversationID: "c", GifID: "gif-001"}); !errors.Is(err, ariousmcp.ErrConfig) {
+		t.Fatalf("model name: %v", err)
 	}
 }

@@ -30,7 +30,7 @@ const DefaultURL = "https://api.ariousmeet.com/v1/mcp"
 const (
 	protocolVersion = "2025-06-18"
 	sdkName         = "arious-meet-mcp-go"
-	sdkVersion      = "0.1.0"
+	sdkVersion      = "0.2.0"
 )
 
 // ToolMeta is the retry-relevant annotation set of one tool.

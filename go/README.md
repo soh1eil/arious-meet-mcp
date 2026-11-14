@@ -1,6 +1,6 @@
 # ariousmcp (Go)
 
-Context-aware Go client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Standard library only (`net/http`), one typed method per server tool (124, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
+Context-aware Go client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Standard library only (`net/http`), one typed method per server tool (127, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
 
 ## Install
 
@@ -43,6 +43,33 @@ func main() {
 ```
 
 Every generated method is `func (c *Client) ToolName(ctx, ToolNameArgs) (*ToolResult, error)`. Required arguments are plain fields, optional strings are omitted when empty, optional booleans/numbers are pointers (use `ariousmcp.Ptr(true)`). `CallTool(ctx, name, map[string]any)` reaches any tool and `ListTools` returns the live catalogue. `ToolResult` has `Text`, `Structured`, `Content`, `IsError`, `Data()` and `Decode(&v)` (structured content, else the text as JSON).
+
+### Chat actions and GIFs
+
+```go
+// Show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send.
+act := ariousmcp.SendChatActionArgs{ConversationID: "CONVERSATION_ID", Action: ariousmcp.ChatActionUploadPhoto}
+_, _ = c.SendChatAction(ctx, act)
+time.Sleep(4 * time.Second)
+_, _ = c.SendChatAction(ctx, act)
+_, err = c.UploadAndSendFile(ctx, "CONVERSATION_ID", "picture.png", ariousmcp.UploadOptions{}) // or ChatActionCancel if you give up
+
+// Search the GIF library (empty query = trending) and send one.
+res, err := c.SearchGifs(ctx, ariousmcp.SearchGifsArgs{Query: "thumbs up", Limit: ariousmcp.Ptr(int64(5))})
+if err != nil {
+	log.Fatal(err)
+}
+found, _ := ariousmcp.DecodeSearchGifs(res) // *SearchGifsResult{Gifs, Busy}
+if len(found.Gifs) > 0 {
+	sent, err := c.SendGif(ctx, ariousmcp.SendGifArgs{ConversationID: "CONVERSATION_ID", GifID: found.Gifs[0].GifID})
+	if err == nil {
+		out, _ := ariousmcp.DecodeSendGif(sent)
+		fmt.Println(out.MessageID)
+	}
+}
+```
+
+`SendTypingArgs` has the same optional `Action` (empty means typing). `ChatAction` is a string type with the eleven constants, `ChatActions()` and `Valid()`; an unknown action is a `*ToolError`.
 
 ## Authentication
 
