@@ -5,7 +5,7 @@ Context-aware Go client for the [Arious Meet](https://api.ariousmeet.com/connect
 ## Install
 
 ```
-go get github.com/ariousmeet/mcp-go
+go get github.com/soh1eil/arious-meet-mcp/go
 ```
 
 ## Quickstart
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"log"
 
-	ariousmcp "github.com/ariousmeet/mcp-go"
+	ariousmcp "github.com/soh1eil/arious-meet-mcp/go"
 )
 
 func main() {

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	ariousmcp "github.com/ariousmeet/mcp-go"
+	ariousmcp "github.com/soh1eil/arious-meet-mcp/go"
 )
 
 var mockURL string
