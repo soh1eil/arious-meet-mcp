@@ -1,6 +1,6 @@
 # @arious-meet/mcp (TypeScript)
 
-Typed client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. ESM, zero runtime dependencies, `fetch` only, so it runs on Node 18+, Deno and Bun. One typed method per server tool (124, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
+Typed client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. ESM, zero runtime dependencies, `fetch` only, so it runs on Node 18+, Deno and Bun. One typed method per server tool (127, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
 
 ## Install
 
@@ -25,6 +25,27 @@ for await (const update of client.watchUpdates({ only: ["mention", "direct_messa
 ```
 
 Tool methods are the camelCase of the tool name (`send_message` is `sendMessage`); argument objects keep the server's own snake_case keys. `client.callTool("any_tool", args)` works for everything, and `client.listTools()` returns the live catalogue. Every result is `{ text, structured, content, isError, data }`; `data` is the structured content, or the parsed text.
+
+### Chat actions and GIFs
+
+```ts
+import { AriousClient, ChatAction } from "@arious-meet/mcp";
+
+// show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send
+await client.sendChatAction({ conversation_id: "CONVERSATION_ID", action: ChatAction.UploadPhoto });
+await new Promise((r) => setTimeout(r, 4000));
+await client.sendChatAction({ conversation_id: "CONVERSATION_ID", action: ChatAction.UploadPhoto });
+await client.uploadAndSendPath("CONVERSATION_ID", "picture.png"); // or ChatAction.Cancel if you give up
+
+// search the GIF library (empty/omitted query = trending) and send one; results are typed
+const { gifs } = (await client.searchGifs({ query: "thumbs up", limit: 5 })).data;
+if (gifs[0]) {
+  const sent = (await client.sendGif({ conversation_id: "CONVERSATION_ID", gif_id: gifs[0].gif_id })).data;
+  console.log(sent.message_id);
+}
+```
+
+`sendTyping({ conversation_id, action? })` takes the same optional action (default `typing`). An unknown action throws `ToolError`.
 
 ## Authentication
 

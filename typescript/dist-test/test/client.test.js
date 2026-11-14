@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { AriousClient, AuthError, ConfigError, ProtocolError, RateLimitError, ServerError, ToolError, TransportError, } from "@arious-meet/mcp";
+import { AriousClient, AuthError, ChatAction, ConfigError, ProtocolError, RateLimitError, ServerError, ToolError, TransportError, } from "@arious-meet/mcp";
 import { modeFetch, push, startMock, stopMock, token } from "./helpers.js";
 let url = "";
 before(async () => {
@@ -19,7 +19,7 @@ describe("client", () => {
     for (const mode of ["json", "sse"]) {
         it(`handshake, list and typed calls (${mode})`, async () => {
             const c = mk(token(), mode);
-            assert.equal((await c.listTools()).length, 124);
+            assert.equal((await c.listTools()).length, 127);
             assert.equal(c.serverInfo.name, "arious-agents");
             assert.equal((await c.whoami()).data.display_name, "Mock Agent");
             assert.equal((await c.listOrganizations()).data.organizations[0].id, "org-1");
@@ -161,5 +161,54 @@ describe("client", () => {
         const p = join(mkdtempSync(join(tmpdir(), "ts-sdk-")), "b.bin");
         writeFileSync(p, Buffer.alloc(1000, 1));
         assert.equal((await c.uploadAndSendPath("conv", p, { caption: "x" })).data.size_bytes, 1000);
+    });
+    async function actionsFor(conv) {
+        const log = (await (await fetch(url.replace("/v1/mcp", "/__mock/log"))).json());
+        return log.actions.filter((a) => a.conversation_id === conv).map((a) => a.action);
+    }
+    for (const mode of ["json", "sse"]) {
+        it(`sendChatAction and sendTyping (${mode})`, async () => {
+            const c = mk(token(), mode);
+            const conv = `conv-act-${mode}`;
+            assert.equal(Object.keys(ChatAction).length, 11);
+            await c.sendChatAction({ conversation_id: conv, action: ChatAction.UploadPhoto });
+            await c.sendChatAction({ conversation_id: conv, action: "cancel" });
+            await c.sendTyping({ conversation_id: conv }); // backward compatible: typing
+            await c.sendTyping({ conversation_id: conv, action: ChatAction.RecordVoice });
+            assert.deepEqual(await actionsFor(conv), ["upload_photo", "cancel", "typing", "record_voice"]);
+        });
+    }
+    it("unknown chat action is a ToolError", async () => {
+        const c = mk(token());
+        await assert.rejects(c.sendChatAction({ conversation_id: "conv-bad", action: "dance" }), (e) => e instanceof ToolError && /unknown action/.test(e.message));
+        await assert.rejects(c.callTool("send_chat_action", { conversation_id: "conv-bad" }), ToolError);
+    });
+    it("searchGifs and sendGif have typed results", async () => {
+        const c = mk(token());
+        const trending = (await c.searchGifs()).data;
+        assert.equal(trending.gifs.length, 6);
+        assert.equal(trending.busy, undefined);
+        const found = (await c.searchGifs({ query: "thumbs up", limit: 1 })).data;
+        assert.deepEqual(found.gifs.map((g) => g.gif_id), ["gif-001"]);
+        const g = found.gifs[0];
+        assert.equal(g?.width, 480);
+        assert.equal(g?.content_type, "image/gif");
+        assert.equal(g?.source, "library");
+        assert.match(g?.preview_url ?? "", /^http/);
+        assert.equal((await c.searchGifs({ query: "busy" })).data.busy, true);
+        const sent = (await c.sendGif({ conversation_id: "conv-gif", gif_id: "gif-001", caption: "nice", silent: true }))
+            .data;
+        assert.equal(sent.gif_id, "gif-001");
+        assert.equal(sent.conversation_id, "conv-gif");
+        assert.match(sent.message_id, /^msg-gif-/);
+        assert.match(sent.attachment_id, /^att-gif-/);
+        assert.equal(sent.sent_via_grant_name, undefined);
+    });
+    it("gif errors", async () => {
+        const c = mk(token());
+        await assert.rejects(c.searchGifs({ limit: 26 }), ToolError);
+        await assert.rejects(c.sendGif({ conversation_id: "c", gif_id: "nope" }), ToolError);
+        const noModel = new AriousClient({ token: token(), url, backoffMs: 5 });
+        await assert.rejects(noModel.sendGif({ conversation_id: "c", gif_id: "gif-001" }), ConfigError);
     });
 });

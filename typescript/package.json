@@ -1,6 +1,6 @@
 {
   "name": "@arious-meet/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed TypeScript client for the Arious Meet MCP server (Node 18+, Deno, Bun: fetch only).",
   "type": "module",
   "main": "./dist/index.js",

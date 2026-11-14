@@ -13,7 +13,7 @@ import type { ClientOptions, ToolResult } from "./types.js";
 
 export const DEFAULT_URL = "https://api.ariousmeet.com/v1/mcp";
 const PROTOCOL_VERSION = "2025-06-18";
-const SDK = "arious-meet-mcp-ts/0.1.0";
+const SDK = "arious-meet-mcp-ts/0.2.0";
 
 type Json = any;
 
@@ -234,7 +234,7 @@ export class AriousClient extends GeneratedTools {
     const result = await this.rpc("initialize", {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "arious-meet-mcp-ts", version: "0.1.0" },
+      clientInfo: { name: "arious-meet-mcp-ts", version: "0.2.0" },
     });
     this.serverInfo = result?.serverInfo ?? {};
     await this.post({ jsonrpc: "2.0", method: "notifications/initialized" }, () => true);
