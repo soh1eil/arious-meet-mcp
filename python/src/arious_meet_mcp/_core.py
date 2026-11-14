@@ -15,7 +15,7 @@ from ._types import ToolResult
 DEFAULT_URL = "https://api.ariousmeet.com/v1/mcp"
 PROTOCOL_VERSION = "2025-06-18"
 SDK_NAME = "arious-meet-mcp-python"
-SDK_VERSION = "0.1.0"
+SDK_VERSION = "0.2.0"
 
 
 @dataclass

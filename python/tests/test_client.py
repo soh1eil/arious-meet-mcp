@@ -3,10 +3,13 @@ import pytest
 
 from arious_meet_mcp import (
     AuthError,
+    ChatAction,
     Client,
     ConfigError,
     ProtocolError,
     RateLimitError,
+    SearchGifsResult,
+    SendGifResult,
     ServerError,
     ToolError,
     TransportError,
@@ -24,7 +27,7 @@ def mk(url, token, mode="json", **kw):
 def test_handshake_list_and_call(mock_url, token, mode):
     c = mk(mock_url, token, mode)
     tools = c.list_tools()
-    assert len(tools) == 124
+    assert len(tools) == 127
     assert c.server_info["name"] == "arious-agents"
     me = c.whoami()
     assert me.data["display_name"] == "Mock Agent"
@@ -161,3 +164,63 @@ def test_watch_updates_acks_after_batch(mock_url, token):
     )
     assert next(gen)["text"] == "c"  # resuming past the first batch acked it
     assert [u["text"] for u in c.get_updates().data["updates"]] == ["c"]  # a, b acked; c not yet
+
+
+def mock_actions(mock_url):
+    r = httpx.get(mock_url.rsplit("/v1/mcp", 1)[0] + "/__mock/log")
+    return r.json()
+
+
+def test_chat_action_enum_values():
+    assert len(ChatAction) == 11
+    assert ChatAction.UPLOAD_PHOTO.value == "upload_photo"
+    assert ChatAction.CANCEL.value == "cancel"
+
+
+@pytest.mark.parametrize("mode", ["json", "sse"])
+def test_send_chat_action_and_typing(mock_url, token, mode):
+    c = mk(mock_url, token, mode)
+    c.send_chat_action("conv-act", ChatAction.UPLOAD_PHOTO)
+    c.send_chat_action("conv-act", ChatAction.CANCEL)
+    c.send_typing("conv-act")  # backward compatible: no action means typing
+    c.send_typing("conv-act", action=ChatAction.RECORD_VOICE)
+    mine = [a for a in mock_actions(mock_url)["actions"] if a["conversation_id"] == "conv-act"]
+    assert [a["action"] for a in mine][-4:] == ["upload_photo", "cancel", "typing", "record_voice"]
+
+
+def test_unknown_chat_action_is_tool_error(mock_url, token):
+    c = mk(mock_url, token)
+    with pytest.raises(ToolError) as e:
+        c.send_chat_action("conv-bad", "dance")  # type: ignore[arg-type]
+    assert "unknown action" in str(e.value)
+    with pytest.raises(ToolError):
+        c.send_typing("conv-bad", action="dance")  # type: ignore[arg-type]
+
+
+def test_search_and_send_gif(mock_url, token):
+    c = mk(mock_url, token)
+    trending = SearchGifsResult.from_result(c.search_gifs())
+    assert len(trending.gifs) == 6 and not trending.busy
+    found = SearchGifsResult.from_result(c.search_gifs(query="thumbs up", limit=1))
+    assert [g.gif_id for g in found.gifs] == ["gif-001"]
+    g = found.gifs[0]
+    assert (g.width, g.height, g.content_type, g.source) == (480, 270, "image/gif", "library")
+    assert g.preview_url and g.preview_url.startswith("http")
+    assert SearchGifsResult.from_result(c.search_gifs(query="busy")).busy
+    sent = SendGifResult.from_result(
+        c.send_gif("conv-gif", g.gif_id, caption="nice", reply_to_id="m1", silent=True)
+    )
+    assert sent.gif_id == "gif-001" and sent.conversation_id == "conv-gif"
+    assert sent.message_id.startswith("msg-gif-") and sent.attachment_id.startswith("att-gif-")
+    assert sent.sent_via_grant_name is None
+
+
+def test_gif_errors(mock_url, token):
+    c = mk(mock_url, token)
+    with pytest.raises(ToolError):
+        c.search_gifs(limit=26)
+    with pytest.raises(ToolError):
+        c.send_gif("conv-gif", "nope")
+    c2 = Client(token, url=mock_url, backoff=0.01)  # no model_name configured
+    with pytest.raises(ConfigError):
+        c2.send_gif("conv-gif", "gif-001")

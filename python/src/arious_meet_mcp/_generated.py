@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
-from ._types import ToolResult
+from ._types import ChatAction, ToolResult
 
 
 # name -> annotations that decide retry safety and automatic arguments.
@@ -472,6 +472,12 @@ TOOL_META: dict[str, dict[str, bool]] = {
         "client_message_id": False,
         "model_name": False,
     },
+    "send_chat_action": {
+        "read_only": False,
+        "idempotent": True,
+        "client_message_id": False,
+        "model_name": False,
+    },
     "add_contact": {
         "read_only": False,
         "idempotent": True,
@@ -753,6 +759,18 @@ TOOL_META: dict[str, dict[str, bool]] = {
         "idempotent": True,
         "client_message_id": False,
         "model_name": False,
+    },
+    "search_gifs": {
+        "read_only": True,
+        "idempotent": True,
+        "client_message_id": False,
+        "model_name": False,
+    },
+    "send_gif": {
+        "read_only": False,
+        "idempotent": False,
+        "client_message_id": False,
+        "model_name": True,
     },
 }
 
@@ -2602,9 +2620,31 @@ class ToolsMixin:
     def send_typing(
         self,
         conversation_id: str,
+        *,
+        action: ChatAction | None = None,
     ) -> ToolResult:
-        """Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character."""
-        return self._call_tool("send_typing", {"conversation_id": conversation_id})
+        """Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
+
+        Args:
+            action: What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+        """
+        return self._call_tool(
+            "send_typing", {"action": action, "conversation_id": conversation_id}
+        )
+
+    def send_chat_action(
+        self,
+        conversation_id: str,
+        action: ChatAction,
+    ) -> ToolResult:
+        """Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.
+
+        Args:
+            action: What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+        """
+        return self._call_tool(
+            "send_chat_action", {"action": action, "conversation_id": conversation_id}
+        )
 
     def add_contact(
         self,
@@ -3385,6 +3425,52 @@ class ToolsMixin:
         return self._call_tool(
             "get_user_profile",
             {"conversation_id": conversation_id, "user_id": user_id, "username": username},
+        )
+
+    def search_gifs(
+        self,
+        *,
+        limit: int | None = None,
+        query: str | None = None,
+    ) -> ToolResult:
+        """Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.
+
+        Args:
+            limit: How many results, default 10.
+            query: What to look for. Empty or omitted = trending.
+        """
+        return self._call_tool("search_gifs", {"limit": limit, "query": query})
+
+    def send_gif(
+        self,
+        conversation_id: str,
+        gif_id: str,
+        *,
+        model_name: str | None = None,
+        caption: str | None = None,
+        reply_to_id: str | None = None,
+        silent: bool | None = None,
+        topic_id: str | None = None,
+    ) -> ToolResult:
+        """Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's "send stickers and GIFs" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.
+
+        Args:
+            gif_id: A gif_id from search_gifs.
+            model_name: Your real model name, e.g. "Claude Sonnet 5".
+            silent: Send with no sound.
+            topic_id: Optional: "general" or an id from list_topics. A reply goes into the topic of the message it answers.
+        """
+        return self._call_tool(
+            "send_gif",
+            {
+                "caption": caption,
+                "conversation_id": conversation_id,
+                "gif_id": gif_id,
+                "model_name": model_name,
+                "reply_to_id": reply_to_id,
+                "silent": silent,
+                "topic_id": topic_id,
+            },
         )
 
 
@@ -5039,9 +5125,31 @@ class AsyncToolsMixin:
     async def send_typing(
         self,
         conversation_id: str,
+        *,
+        action: ChatAction | None = None,
     ) -> ToolResult:
-        """Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character."""
-        return await self._call_tool("send_typing", {"conversation_id": conversation_id})
+        """Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
+
+        Args:
+            action: What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+        """
+        return await self._call_tool(
+            "send_typing", {"action": action, "conversation_id": conversation_id}
+        )
+
+    async def send_chat_action(
+        self,
+        conversation_id: str,
+        action: ChatAction,
+    ) -> ToolResult:
+        """Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.
+
+        Args:
+            action: What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.
+        """
+        return await self._call_tool(
+            "send_chat_action", {"action": action, "conversation_id": conversation_id}
+        )
 
     async def add_contact(
         self,
@@ -5828,4 +5936,50 @@ class AsyncToolsMixin:
         return await self._call_tool(
             "get_user_profile",
             {"conversation_id": conversation_id, "user_id": user_id, "username": username},
+        )
+
+    async def search_gifs(
+        self,
+        *,
+        limit: int | None = None,
+        query: str | None = None,
+    ) -> ToolResult:
+        """Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.
+
+        Args:
+            limit: How many results, default 10.
+            query: What to look for. Empty or omitted = trending.
+        """
+        return await self._call_tool("search_gifs", {"limit": limit, "query": query})
+
+    async def send_gif(
+        self,
+        conversation_id: str,
+        gif_id: str,
+        *,
+        model_name: str | None = None,
+        caption: str | None = None,
+        reply_to_id: str | None = None,
+        silent: bool | None = None,
+        topic_id: str | None = None,
+    ) -> ToolResult:
+        """Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's "send stickers and GIFs" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.
+
+        Args:
+            gif_id: A gif_id from search_gifs.
+            model_name: Your real model name, e.g. "Claude Sonnet 5".
+            silent: Send with no sound.
+            topic_id: Optional: "general" or an id from list_topics. A reply goes into the topic of the message it answers.
+        """
+        return await self._call_tool(
+            "send_gif",
+            {
+                "caption": caption,
+                "conversation_id": conversation_id,
+                "gif_id": gif_id,
+                "model_name": model_name,
+                "reply_to_id": reply_to_id,
+                "silent": silent,
+                "topic_id": topic_id,
+            },
         )

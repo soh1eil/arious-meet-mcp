@@ -13,6 +13,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC = os.path.join(HERE, "..", "..", "spec", "tools.json")
 OUT = os.path.join(HERE, "..", "src", "arious_meet_mcp", "_generated.py")
 
+CHAT_ACTIONS = [
+    "typing",
+    "upload_photo",
+    "upload_video",
+    "record_voice",
+    "upload_voice",
+    "upload_document",
+    "record_video_note",
+    "upload_video_note",
+    "choose_sticker",
+    "find_location",
+    "cancel",
+]
+
 typed_dicts = {}  # name -> source
 
 
@@ -35,6 +49,8 @@ def py_type(s, hint):
         inner = py_type({**s, "type": non_null[0]}, hint) if non_null else "Any"
         return inner + " | None" if "null" in t else inner
     if "enum" in s:
+        if s["enum"] == CHAT_ACTIONS:
+            return "ChatAction"
         return "Literal[%s]" % ", ".join(json.dumps(v) for v in s["enum"])
     if t == "string":
         return "str"
@@ -161,7 +177,7 @@ def main():
         "",
         "from typing import Any, Literal, TypedDict",
         "",
-        "from ._types import ToolResult",
+        "from ._types import ChatAction, ToolResult",
         "",
         "",
         "# name -> annotations that decide retry safety and automatic arguments.",

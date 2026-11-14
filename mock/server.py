@@ -35,7 +35,8 @@ class State:
         self.acked = {}      # token -> seq
         self.seq = 0
         self.uploads = {}    # upload_id -> bytes
-        self.sent = []       # every send_message / send_file result
+        self.sent = []       # every send_message / send_file / send_gif result
+        self.actions = []    # every accepted chat action {conversation_id, action}
 
 
 S = None
@@ -57,6 +58,23 @@ def struct_result(obj, text=None, is_error=False):
     if is_error:
         out["isError"] = True
     return out
+
+
+CHAT_ACTIONS = [
+    "typing", "upload_photo", "upload_video", "record_voice", "upload_voice",
+    "upload_document", "record_video_note", "upload_video_note", "choose_sticker",
+    "find_location", "cancel",
+]
+
+# A tiny GIF library: (gif_id, title, width, height). Trending = all, in order.
+GIF_LIBRARY = [
+    ("gif-001", "thumbs up", 480, 270),
+    ("gif-002", "celebration confetti", 498, 280),
+    ("gif-003", "applause", 400, 300),
+    ("gif-004", "facepalm", 480, 360),
+    ("gif-005", "thumbs up cat", 320, 320),
+    ("gif-006", "mind blown", 480, 270),
+]
 
 
 def tool_error(msg):
@@ -132,6 +150,58 @@ def call_tool(token, name, args, base):
                  "size_bytes": len(S.uploads[uid]), "conversation_id": args.get("conversation_id")}
             S.sent.append(m)
         return struct_result(m)
+    if name in ("send_typing", "send_chat_action"):
+        if not args.get("conversation_id"):
+            return tool_error("conversation_id is required")
+        action = args.get("action")
+        if name == "send_chat_action" and not action:
+            return tool_error("action is required; one of: " + ", ".join(CHAT_ACTIONS))
+        if action is None or action == "":
+            action = "typing"
+        if action not in CHAT_ACTIONS:
+            return tool_error("unknown action; one of: " + ", ".join(CHAT_ACTIONS))
+        with LOCK:
+            S.actions.append({"conversation_id": args["conversation_id"], "action": action})
+        return {"content": [{"type": "text", "text": "sent"}]}
+    if name == "search_gifs":
+        limit = args.get("limit", 10)
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > 25:
+            return tool_error("limit must be between 1 and 25")
+        q = (args.get("query") or "").strip().lower()
+        rows = [g for g in GIF_LIBRARY if not q or all(w in g[1] for w in q.split())]
+        gifs = [{
+            "gif_id": g[0], "title": g[1], "width": g[2], "height": g[3],
+            "content_type": "image/gif", "source": "library",
+            "preview_url": "%s/v1/gifs/agent-preview/%s/4102444800/mocksig" % (base, g[0]),
+        } for g in rows[:limit]]
+        out = {"gifs": gifs}
+        text = "%d GIF(s). Send one with send_gif(gif_id)." % len(gifs)
+        if q == "busy":
+            out["busy"] = True
+            text += " The live GIF source is busy, so this list may be shorter than usual; try again later for more."
+        return struct_result(out, text)
+    if name == "send_gif":
+        if not args.get("model_name"):
+            return tool_error("model_name is required: sign every message with your real model name")
+        if not (args.get("conversation_id") or "").strip():
+            return tool_error("conversation_id is required")
+        gid = (args.get("gif_id") or "").strip()
+        if not gid:
+            return tool_error("gif_id is required")
+        if gid not in [g[0] for g in GIF_LIBRARY]:
+            return tool_error("that GIF is not in the library; find one with search_gifs")
+        cap = args.get("caption") or ""
+        if len(cap) > 3000:
+            return tool_error("caption is too long")
+        with LOCK:
+            n = len(S.sent) + 1
+            m = {"message_id": "msg-gif-%d" % n, "conversation_id": args["conversation_id"],
+                 "attachment_id": "att-gif-%d" % n, "gif_id": gid}
+            if args.get("silent"):
+                m["silent"] = True
+            S.sent.append(dict(m, caption=cap, reply_to_id=args.get("reply_to_id"),
+                               topic_id=args.get("topic_id")))
+        return struct_result(m, "sent")
     if name in TOOL_NAMES:
         return tool_error("tool %s is not implemented by the mock server" % name)
     raise RpcError(-32602, "no such tool: " + name)
@@ -212,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         if u.path == "/__mock/log":
-            return self._send(200, {"log": S.log, "sent": S.sent})
+            return self._send(200, {"log": S.log, "sent": S.sent, "actions": S.actions})
         if not (u.path == "/v1/mcp" or u.path.startswith("/v1/mcp/t/")):
             return self._send(404, {"error": "not found"})
         tok = self._token()

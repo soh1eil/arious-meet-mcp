@@ -1,7 +1,16 @@
 import httpx
 import pytest
 
-from arious_meet_mcp import AsyncClient, AuthError, Client, ConfigError, ToolError
+from arious_meet_mcp import (
+    AsyncClient,
+    AuthError,
+    ChatAction,
+    Client,
+    ConfigError,
+    SearchGifsResult,
+    SendGifResult,
+    ToolError,
+)
 
 
 def base(mock_url):
@@ -11,7 +20,7 @@ def base(mock_url):
 async def test_async_basic_and_sse(mock_url, token):
     async with AsyncClient(token, url=mock_url, model_name="M", backoff=0.01) as c:
         c._http.headers["X-Mock-Mode"] = "sse"
-        assert len(await c.list_tools()) == 124
+        assert len(await c.list_tools()) == 127
         assert (await c.whoami()).data["agent_id"] == "agent-1"
         m = await c.send_message("conv", "hi")
         assert m.data["text"].endswith("M")
@@ -58,3 +67,18 @@ async def test_async_upload(mock_url, token):
     async with AsyncClient(token, url=mock_url, model_name="M") as c:
         r = await c.upload_and_send("conv", b"hello!", filename="a.txt")
         assert r.data["size_bytes"] == 6
+
+
+async def test_async_chat_action_and_gif(mock_url, token):
+    async with AsyncClient(token, url=mock_url, model_name="M", backoff=0.01) as c:
+        await c.send_chat_action("conv-async", ChatAction.UPLOAD_VIDEO)
+        await c.send_typing("conv-async", action=ChatAction.CANCEL)
+        with pytest.raises(ToolError):
+            await c.send_chat_action("conv-async", "dance")  # type: ignore[arg-type]
+        found = SearchGifsResult.from_result(await c.search_gifs(query="applause"))
+        assert [g.gif_id for g in found.gifs] == ["gif-003"]
+        sent = SendGifResult.from_result(await c.send_gif("conv-async", "gif-003"))
+        assert sent.gif_id == "gif-003"
+    log = httpx.get(base(mock_url) + "/__mock/log").json()["actions"]
+    mine = [a["action"] for a in log if a["conversation_id"] == "conv-async"]
+    assert mine == ["upload_video", "cancel"]

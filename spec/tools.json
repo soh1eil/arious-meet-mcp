@@ -3350,9 +3350,26 @@
         "readOnlyHint": false,
         "title": "Send typing notice"
       },
-      "description": "Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character.",
+      "description": "Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.",
       "inputSchema": {
         "properties": {
+          "action": {
+            "description": "What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.",
+            "enum": [
+              "typing",
+              "upload_photo",
+              "upload_video",
+              "record_voice",
+              "upload_voice",
+              "upload_document",
+              "record_video_note",
+              "upload_video_note",
+              "choose_sticker",
+              "find_location",
+              "cancel"
+            ],
+            "type": "string"
+          },
           "conversation_id": {
             "type": "string"
           }
@@ -3363,6 +3380,46 @@
         "type": "object"
       },
       "name": "send_typing"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": false,
+        "title": "Send chat action"
+      },
+      "description": "Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.",
+      "inputSchema": {
+        "properties": {
+          "action": {
+            "description": "What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on.",
+            "enum": [
+              "typing",
+              "upload_photo",
+              "upload_video",
+              "record_voice",
+              "upload_voice",
+              "upload_document",
+              "record_video_note",
+              "upload_video_note",
+              "choose_sticker",
+              "find_location",
+              "cancel"
+            ],
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "action"
+        ],
+        "type": "object"
+      },
+      "name": "send_chat_action"
     },
     {
       "annotations": {
@@ -4949,6 +5006,78 @@
         "type": "object"
       },
       "name": "get_user_profile"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true,
+        "title": "Search GIFs"
+      },
+      "description": "Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.",
+      "inputSchema": {
+        "properties": {
+          "limit": {
+            "description": "How many results, default 10.",
+            "maximum": 25,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "description": "What to look for. Empty or omitted = trending.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "search_gifs"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false,
+        "title": "Send GIF"
+      },
+      "description": "Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's \"send stickers and GIFs\" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.",
+      "inputSchema": {
+        "properties": {
+          "caption": {
+            "type": "string"
+          },
+          "conversation_id": {
+            "type": "string"
+          },
+          "gif_id": {
+            "description": "A gif_id from search_gifs.",
+            "type": "string"
+          },
+          "model_name": {
+            "description": "Your real model name, e.g. \"Claude Sonnet 5\".",
+            "type": "string"
+          },
+          "reply_to_id": {
+            "type": "string"
+          },
+          "silent": {
+            "description": "Send with no sound.",
+            "type": "boolean"
+          },
+          "topic_id": {
+            "description": "Optional: \"general\" or an id from list_topics. A reply goes into the topic of the message it answers.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "gif_id",
+          "model_name"
+        ],
+        "type": "object"
+      },
+      "name": "send_gif"
     }
   ]
 }

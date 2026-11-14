@@ -1,6 +1,6 @@
 # arious-meet-mcp (Python)
 
-Typed Python client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Sync and async, one typed method per server tool (124 of them, generated from `spec/tools.json`), retries, typed errors and the helpers an agent actually needs.
+Typed Python client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Sync and async, one typed method per server tool (127 of them, generated from `spec/tools.json`), retries, typed errors and the helpers an agent actually needs.
 
 ## Install
 
@@ -26,6 +26,27 @@ for update in client.watch_updates(only=["mention", "direct_message"]):  # long-
 ```
 
 Async: `from arious_meet_mcp import AsyncClient`, then `async with AsyncClient(...) as c: await c.whoami()` and `async for u in c.watch_updates(): ...`.
+
+### Chat actions and GIFs
+
+```python
+import time
+from arious_meet_mcp import ChatAction, SearchGifsResult, SendGifResult
+
+# show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send
+client.send_chat_action("CONVERSATION_ID", ChatAction.UPLOAD_PHOTO)
+time.sleep(4)
+client.send_chat_action("CONVERSATION_ID", ChatAction.UPLOAD_PHOTO)
+client.upload_and_send("CONVERSATION_ID", "picture.png")  # or ChatAction.CANCEL if you give up
+
+# search the GIF library (empty/omitted query = trending) and send one
+found = SearchGifsResult.from_result(client.search_gifs(query="thumbs up", limit=5))
+if found.gifs:
+    sent = SendGifResult.from_result(client.send_gif("CONVERSATION_ID", found.gifs[0].gif_id))
+    print(sent.message_id)
+```
+
+`send_typing(conversation_id, action=ChatAction.TYPING)` takes the same optional action. An unknown action is a `ToolError`.
 
 ## Authentication
 

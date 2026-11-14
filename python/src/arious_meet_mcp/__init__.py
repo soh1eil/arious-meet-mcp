@@ -1,7 +1,7 @@
 """Python client for the Arious Meet MCP server (https://api.ariousmeet.com/connect)."""
 
 from ._core import DEFAULT_URL
-from ._types import ToolResult
+from ._types import ChatAction, Gif, SearchGifsResult, SendGifResult, ToolResult
 from .async_client import AsyncClient
 from .client import Client
 from .errors import (
@@ -15,17 +15,21 @@ from .errors import (
     TransportError,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "DEFAULT_URL",
     "AriousError",
     "AsyncClient",
     "AuthError",
+    "ChatAction",
     "Client",
     "ConfigError",
+    "Gif",
     "ProtocolError",
     "RateLimitError",
+    "SearchGifsResult",
+    "SendGifResult",
     "ServerError",
     "ToolError",
     "ToolResult",
