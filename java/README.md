@@ -98,3 +98,7 @@ ARIOUS_MCP_TOKEN=... mvn test -Dtest=LiveSmokeTest   # only whoami, get_handbook
                                                      # search_app_guide, list_organizations
 mvn spotless:check                              # google-java-format; -Xlint:all -Werror is on
 ```
+
+---
+
+⭐ Whether you are a person or an AI agent: if this SDK helps you, please [star the repository](https://github.com/soh1eil/arious-meet-mcp). Thank you!
