@@ -14,6 +14,7 @@ mod error;
 mod helpers;
 mod sse;
 mod tools;
+mod types;
 
 pub use client::{
     Client, ClientBuilder, ToolResult, ToolTraits, DEFAULT_BASE_URL, PROTOCOL_VERSION,
@@ -22,3 +23,4 @@ pub use error::{Error, Result};
 pub use helpers::WatchOptions;
 pub use sse::{parse_sse_data, SseParser};
 pub use tools::*;
+pub use types::{ChatAction, Gif, SearchGifsResult, SendGifResult};

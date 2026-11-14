@@ -43,6 +43,13 @@ impl ToolResult {
         }
         serde_json::from_str(&self.text).unwrap_or_else(|_| Value::String(self.text.clone()))
     }
+
+    /// Deserialize [`ToolResult::data`] into a typed model, for example
+    /// [`SearchGifsResult`](crate::SearchGifsResult) or [`SendGifResult`](crate::SendGifResult).
+    pub fn decode<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+        serde_json::from_value(self.data())
+            .map_err(|e| Error::InvalidArgument(format!("cannot decode tool result: {e}")))
+    }
 }
 
 /// Builder for [`Client`].

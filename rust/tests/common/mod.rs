@@ -44,6 +44,23 @@ impl Mock {
         v["log"].as_array().cloned().unwrap_or_default()
     }
 
+    pub async fn actions(&self, conversation: &str) -> Vec<String> {
+        let v: Value = reqwest::get(format!("{}/__mock/log", self.origin))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        v["actions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .filter(|a| a["conversation_id"] == conversation)
+            .map(|a| a["action"].as_str().unwrap().to_string())
+            .collect()
+    }
+
     pub async fn push(&self, token: &str, items: Value) {
         reqwest::Client::new()
             .post(format!("{}/__mock/push", self.origin))

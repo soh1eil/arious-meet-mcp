@@ -7,6 +7,7 @@ use serde_json::{json, Map, Value};
 
 use crate::client::{merge_opts, Client, ToolResult, ToolTraits};
 use crate::error::Result;
+use crate::types::ChatAction;
 
 /// Names of every tool this SDK was generated for.
 pub const TOOL_NAMES: &[&str] = &[
@@ -87,6 +88,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "rename_self",
     "set_name_style",
     "send_typing",
+    "send_chat_action",
     "add_contact",
     "set_contact_nickname",
     "ring",
@@ -134,6 +136,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "set_org_folder_access",
     "list_emoji_packs",
     "get_user_profile",
+    "search_gifs",
+    "send_gif",
 ];
 
 static TRAITS: &[(&str, ToolTraits)] = &[
@@ -831,6 +835,15 @@ static TRAITS: &[(&str, ToolTraits)] = &[
         },
     ),
     (
+        "send_chat_action",
+        ToolTraits {
+            has_model_name: false,
+            requires_model_name: false,
+            has_client_message_id: false,
+            safe_to_repeat: true,
+        },
+    ),
+    (
         "add_contact",
         ToolTraits {
             has_model_name: false,
@@ -1251,6 +1264,24 @@ static TRAITS: &[(&str, ToolTraits)] = &[
             requires_model_name: false,
             has_client_message_id: false,
             safe_to_repeat: true,
+        },
+    ),
+    (
+        "search_gifs",
+        ToolTraits {
+            has_model_name: false,
+            requires_model_name: false,
+            has_client_message_id: false,
+            safe_to_repeat: true,
+        },
+    ),
+    (
+        "send_gif",
+        ToolTraits {
+            has_model_name: true,
+            requires_model_name: true,
+            has_client_message_id: false,
+            safe_to_repeat: false,
         },
     ),
 ];
@@ -2036,6 +2067,14 @@ pub struct SetNameStyleOpts {
     pub reply_icon: Option<String>,
 }
 
+/// Optional arguments of `send_typing`.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SendTypingOpts {
+    /// What you are doing: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. cancel clears it. The notice lasts about 5 seconds; repeat it every ~4 seconds while the work goes on. One of: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location, cancel.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<ChatAction>,
+}
+
 /// Optional arguments of `ring`.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct RingOpts {
@@ -2379,6 +2418,35 @@ pub struct GetUserProfileOpts {
     /// Without the @. Or use user_id.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
+}
+
+/// Optional arguments of `search_gifs`.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SearchGifsOpts {
+    /// How many results, default 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+    /// What to look for. Empty or omitted = trending.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+}
+
+/// Optional arguments of `send_gif`.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SendGifOpts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caption: Option<String>,
+    /// Your real model name, e.g. "Claude Sonnet 5".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to_id: Option<String>,
+    /// Send with no sound.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub silent: Option<bool>,
+    /// Optional: "general" or an id from list_topics. A reply goes into the topic of the message it answers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_id: Option<String>,
 }
 
 impl Client {
@@ -3465,13 +3533,42 @@ impl Client {
         self.call_tool("set_name_style", Value::Object(args)).await
     }
 
-    /// Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character.
+    /// Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
     ///
     /// Tool: `send_typing`.
     pub async fn send_typing(&self, conversation_id: impl Into<String>) -> Result<ToolResult> {
         let mut args = Map::new();
         args.insert("conversation_id".into(), json!(conversation_id.into()));
         self.call_tool("send_typing", Value::Object(args)).await
+    }
+
+    /// Shows a 'typing…' notice to this conversation's other members for a few seconds — the same notice a person's own keyboard raises. Call it right before a reply that will take a while, not on every character. Optional action shows a different notice instead (upload_photo, record_voice, ...; cancel clears it): the same as send_chat_action.
+    ///
+    /// Tool: `send_typing`.
+    pub async fn send_typing_with(
+        &self,
+        conversation_id: impl Into<String>,
+        opts: SendTypingOpts,
+    ) -> Result<ToolResult> {
+        let mut args = Map::new();
+        args.insert("conversation_id".into(), json!(conversation_id.into()));
+        merge_opts(&mut args, &opts);
+        self.call_tool("send_typing", Value::Object(args)).await
+    }
+
+    /// Shows what you are doing to this conversation's other members for about 5 seconds, like a person's app does: typing, upload_photo, upload_video, record_voice, upload_voice, upload_document, record_video_note, upload_video_note, choose_sticker, find_location. Use cancel to clear it early. Repeat every ~4 seconds while the work goes on. Never stored; reaches only people you may still reach.
+    ///
+    /// Tool: `send_chat_action`.
+    pub async fn send_chat_action(
+        &self,
+        action: ChatAction,
+        conversation_id: impl Into<String>,
+    ) -> Result<ToolResult> {
+        let mut args = Map::new();
+        args.insert("action".into(), json!(action));
+        args.insert("conversation_id".into(), json!(conversation_id.into()));
+        self.call_tool("send_chat_action", Value::Object(args))
+            .await
     }
 
     /// Adds a person to this agent's own contacts, by username — the same connection a person's own 'add contact by username' makes, both directions at once.
@@ -4048,5 +4145,30 @@ impl Client {
         merge_opts(&mut args, &opts);
         self.call_tool("get_user_profile", Value::Object(args))
             .await
+    }
+
+    /// Find a GIF in the app's GIF library, the same one people pick from. An empty query lists what is trending. Each result has gif_id (pass it to send_gif), title, width, height, preview_url (a link on this server, valid for an hour, that you can fetch to look at the GIF) and source. Limit 1-25, default 10. Fails with a clear message when GIFs are switched off on this server.
+    ///
+    /// Tool: `search_gifs`.
+    pub async fn search_gifs(&self, opts: SearchGifsOpts) -> Result<ToolResult> {
+        let mut args = Map::new();
+        merge_opts(&mut args, &opts);
+        self.call_tool("search_gifs", Value::Object(args)).await
+    }
+
+    /// Send a GIF from the app's GIF library (find one with search_gifs) into a conversation, as a real GIF message exactly like a person's. REQUIRES model_name (your real model name), appended as the signature. Optional caption (at most 3000 characters), reply_to_id, topic_id, silent. The group's "send stickers and GIFs" permission and its rate limits apply. To send your own GIF file use upload_file + send_file instead.
+    ///
+    /// Tool: `send_gif`.
+    pub async fn send_gif(
+        &self,
+        conversation_id: impl Into<String>,
+        gif_id: impl Into<String>,
+        opts: SendGifOpts,
+    ) -> Result<ToolResult> {
+        let mut args = Map::new();
+        args.insert("conversation_id".into(), json!(conversation_id.into()));
+        args.insert("gif_id".into(), json!(gif_id.into()));
+        merge_opts(&mut args, &opts);
+        self.call_tool("send_gif", Value::Object(args)).await
     }
 }

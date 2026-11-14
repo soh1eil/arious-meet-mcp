@@ -1,6 +1,6 @@
 [package]
 name = "arious-meet-mcp"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Typed async client for the Arious Meet MCP server (Streamable HTTP), with generated wrappers for every tool."

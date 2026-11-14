@@ -12,12 +12,12 @@ async fn handshake_lists_all_tools_in_both_modes() {
         let info = c.initialize().await.unwrap();
         assert!(info["serverInfo"].is_object(), "{mode}");
         let tools = c.list_tools().await.unwrap();
-        assert_eq!(tools.len(), 124, "{mode}");
+        assert_eq!(tools.len(), 127, "{mode}");
         let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
         for n in TOOL_NAMES {
             assert!(names.contains(n), "missing {n}");
         }
-        assert_eq!(TOOL_NAMES.len(), 124);
+        assert_eq!(TOOL_NAMES.len(), 127);
     }
 }
 
@@ -302,6 +302,137 @@ async fn token_in_path_form() {
         .build()
         .unwrap();
     assert!(!c.whoami().await.unwrap().is_error);
+}
+
+#[tokio::test]
+async fn chat_actions_and_typing_in_both_modes() {
+    for mode in ["json", "sse"] {
+        let m = Mock::start(mode);
+        let c = m.client();
+        let conv = format!("conv-act-{mode}");
+        assert_eq!(ChatAction::ALL.len(), 11);
+        assert_eq!(ChatAction::UploadVideoNote.as_wire(), "upload_video_note");
+        assert_eq!(
+            serde_json::to_value(ChatAction::RecordVoice).unwrap(),
+            "record_voice"
+        );
+        c.send_chat_action(ChatAction::UploadPhoto, &conv)
+            .await
+            .unwrap();
+        c.send_chat_action(ChatAction::Cancel, &conv).await.unwrap();
+        c.send_typing(&conv).await.unwrap(); // backward compatible: no action means typing
+        c.send_typing_with(
+            &conv,
+            SendTypingOpts {
+                action: Some(ChatAction::RecordVoice),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            m.actions(&conv).await,
+            ["upload_photo", "cancel", "typing", "record_voice"],
+            "{mode}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unknown_chat_action_is_a_tool_error() {
+    let m = Mock::start("json");
+    let c = m.client();
+    match c
+        .call_tool(
+            "send_chat_action",
+            json!({"conversation_id": "c", "action": "dance"}),
+        )
+        .await
+    {
+        Err(Error::Tool { message, .. }) => assert!(message.contains("unknown action")),
+        other => panic!("expected tool error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn search_and_send_gif_typed_results() {
+    let m = Mock::start("json");
+    let c = m.client();
+    let trending: SearchGifsResult = c
+        .search_gifs(Default::default())
+        .await
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert_eq!(trending.gifs.len(), 6);
+    assert!(!trending.busy);
+    let found: SearchGifsResult = c
+        .search_gifs(SearchGifsOpts {
+            query: Some("thumbs up".into()),
+            limit: Some(1),
+        })
+        .await
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert_eq!(found.gifs.len(), 1);
+    let g = &found.gifs[0];
+    assert_eq!(g.gif_id, "gif-001");
+    assert_eq!(g.width, 480);
+    assert_eq!(g.content_type, "image/gif");
+    assert_eq!(g.source, "library");
+    assert!(g.preview_url.as_deref().unwrap().starts_with("http"));
+    let busy: SearchGifsResult = c
+        .search_gifs(SearchGifsOpts {
+            query: Some("busy".into()),
+            limit: None,
+        })
+        .await
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert!(busy.busy);
+    let sent: SendGifResult = c
+        .send_gif(
+            "conv-gif",
+            &g.gif_id,
+            SendGifOpts {
+                caption: Some("nice".into()),
+                silent: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert_eq!(sent.gif_id, "gif-001");
+    assert_eq!(sent.conversation_id, "conv-gif");
+    assert!(sent.message_id.starts_with("msg-gif-"));
+    assert!(sent.attachment_id.starts_with("att-gif-"));
+    assert_eq!(sent.sent_via_grant_name, None);
+}
+
+#[tokio::test]
+async fn gif_errors() {
+    let m = Mock::start("json");
+    let c = m.client();
+    assert!(matches!(
+        c.search_gifs(SearchGifsOpts {
+            query: None,
+            limit: Some(26)
+        })
+        .await,
+        Err(Error::Tool { .. })
+    ));
+    assert!(matches!(
+        c.send_gif("c", "nope", Default::default()).await,
+        Err(Error::Tool { .. })
+    ));
+    let bare = m.client_with(&unique_token(), None);
+    assert!(matches!(
+        bare.send_gif("c", "gif-001", Default::default()).await,
+        Err(Error::InvalidArgument(_))
+    ));
 }
 
 #[test]

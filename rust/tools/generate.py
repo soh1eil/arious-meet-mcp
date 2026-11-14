@@ -28,8 +28,20 @@ def ident(s):
     return "r#" + s if s in KEYWORDS else s
 
 
+CHAT_ACTIONS = ["typing", "upload_photo", "upload_video", "record_voice", "upload_voice",
+                "upload_document", "record_video_note", "upload_video_note", "choose_sticker",
+                "find_location", "cancel"]
+
+
+# Tools that gained optional arguments after 0.1.0: the original method keeps its
+# signature (no opts parameter) and `<name>_with` takes the options.
+KEEP_SIGNATURE = {"send_typing"}
+
+
 def rtype(sch, owned=True):
     t = sch.get("type")
+    if sch.get("enum") == CHAT_ACTIONS:
+        return "ChatAction"
     if t == "string":
         return "String"
     if t == "integer":
@@ -60,7 +72,7 @@ def main():
          "use serde::Serialize;",
          "use serde_json::{json, Map, Value};", "",
          "use crate::client::{merge_opts, Client, ToolResult, ToolTraits};",
-         "use crate::error::Result;", ""]
+         "use crate::error::Result;", "use crate::types::ChatAction;", ""]
     o.append("/// Names of every tool this SDK was generated for.")
     o.append("pub const TOOL_NAMES: &[&str] = &[")
     for t in tools:
@@ -104,30 +116,34 @@ def main():
                 o.append('    #[serde(skip_serializing_if = "Option::is_none")]')
                 o.append("    pub %s: Option<%s>," % (ident(k), rtype(sch)))
             o.append("}\n")
-        impls.append(doc(t.get("description", name), "    "))
-        impls.append("    ///")
-        impls.append("    /// Tool: `%s`." % name)
-        params = []
-        for k in req:
-            sch = props[k]
-            tp = rtype(sch)
-            params.append("%s: %s" % (ident(k), "impl Into<String>" if tp == "String" else tp))
-        if opt:
-            params.append("opts: %s" % sname)
-        impls.append("    pub async fn %s(&self%s) -> Result<ToolResult> {" % (
-            ident(name), "".join(", " + p for p in params)))
-        if props:
-            impls.append("        let mut args = Map::new();")
+        variants = [(ident(name), True)]
+        if name in KEEP_SIGNATURE and opt:
+            variants = [(ident(name), False), (ident(name) + "_with", True)]
+        for mname, with_opts in variants:
+            impls.append(doc(t.get("description", name), "    "))
+            impls.append("    ///")
+            impls.append("    /// Tool: `%s`." % name)
+            params = []
             for k in req:
-                tp = rtype(props[k])
-                v = "%s.into()" % ident(k) if tp == "String" else ident(k)
-                impls.append('        args.insert("%s".into(), json!(%s));' % (k, v))
-            if opt:
-                impls.append("        merge_opts(&mut args, &opts);")
-            impls.append('        self.call_tool("%s", Value::Object(args)).await' % name)
-        else:
-            impls.append('        self.call_tool("%s", Value::Null).await' % name)
-        impls.append("    }\n")
+                sch = props[k]
+                tp = rtype(sch)
+                params.append("%s: %s" % (ident(k), "impl Into<String>" if tp == "String" else tp))
+            if opt and with_opts:
+                params.append("opts: %s" % sname)
+            impls.append("    pub async fn %s(&self%s) -> Result<ToolResult> {" % (
+                mname, "".join(", " + p for p in params)))
+            if props:
+                impls.append("        let mut args = Map::new();")
+                for k in req:
+                    tp = rtype(props[k])
+                    v = "%s.into()" % ident(k) if tp == "String" else ident(k)
+                    impls.append('        args.insert("%s".into(), json!(%s));' % (k, v))
+                if opt and with_opts:
+                    impls.append("        merge_opts(&mut args, &opts);")
+                impls.append('        self.call_tool("%s", Value::Object(args)).await' % name)
+            else:
+                impls.append('        self.call_tool("%s", Value::Null).await' % name)
+            impls.append("    }\n")
     impls.append("}")
     o.extend(impls)
     OUT.write_text("\n".join(o) + "\n")
