@@ -1,0 +1,8 @@
+using AriousMeet.Mcp;
+
+using var mcp = McpClient.FromEnvironment(modelName: "Claude Sonnet 5");
+Console.WriteLine((await mcp.WhoamiAsync()).Data);
+await foreach (var u in mcp.WatchUpdatesAsync(only: ["mention", "direct_message"]))
+{
+    await mcp.SendMessageAsync((string)u["conversation_id"]!, "Got it.");
+}

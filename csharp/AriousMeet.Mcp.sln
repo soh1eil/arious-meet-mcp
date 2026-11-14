@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F80CFCE1-5EE8-43DC-9E33-523B97FD78F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AriousMeet.Mcp", "src\AriousMeet.Mcp\AriousMeet.Mcp.csproj", "{B5263188-BDCD-43FD-ABB7-BDFCC5915A89}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{3672B217-6E5D-442A-903B-A0D8A0A0165E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AriousMeet.Mcp.Tests", "tests\AriousMeet.Mcp.Tests\AriousMeet.Mcp.Tests.csproj", "{B971ACE7-4F7C-4770-89D4-97C8886D43A7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B5263188-BDCD-43FD-ABB7-BDFCC5915A89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B5263188-BDCD-43FD-ABB7-BDFCC5915A89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B5263188-BDCD-43FD-ABB7-BDFCC5915A89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B5263188-BDCD-43FD-ABB7-BDFCC5915A89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B971ACE7-4F7C-4770-89D4-97C8886D43A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B971ACE7-4F7C-4770-89D4-97C8886D43A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B971ACE7-4F7C-4770-89D4-97C8886D43A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B971ACE7-4F7C-4770-89D4-97C8886D43A7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B5263188-BDCD-43FD-ABB7-BDFCC5915A89} = {F80CFCE1-5EE8-43DC-9E33-523B97FD78F8}
+		{B971ACE7-4F7C-4770-89D4-97C8886D43A7} = {3672B217-6E5D-442A-903B-A0D8A0A0165E}
+	EndGlobalSection
+EndGlobal
