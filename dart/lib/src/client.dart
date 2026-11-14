@@ -11,7 +11,7 @@ import 'tools.g.dart' show toolTraits;
 
 const String defaultBaseUrl = 'https://api.ariousmeet.com/v1/mcp';
 const String protocolVersion = '2025-06-18';
-const String sdkVersion = '0.1.0';
+const String sdkVersion = '0.2.0';
 
 /// The decoded result of a `tools/call`.
 class ToolResult {

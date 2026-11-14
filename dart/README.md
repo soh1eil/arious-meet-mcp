@@ -1,7 +1,7 @@
 # arious_meet_mcp (Dart)
 
 Typed Dart client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server
-(Streamable HTTP, JSON-RPC 2.0). One method per tool (124), generated from `spec/tools.json`.
+(Streamable HTTP, JSON-RPC 2.0). One method per tool (127), generated from `spec/tools.json`.
 
 ## Install
 
@@ -57,6 +57,26 @@ tools with `client_message_id` (the client fills in a fresh UUID so a retry neve
 * `watchUpdates({only, waitSeconds})`: `get_updates` long-poll loop that acks after each batch is consumed.
 * `notifications()`: the SSE `GET` stream of `notifications/resources/updated`.
 * `uploadBytes` / `sendLocalFile`: `create_upload_url` + PUT + `send_file`.
+
+## Chat actions and GIFs
+
+```dart
+// Show "sending a photo..." while you work (it fades after ~5 s: repeat about every 4 s), then send.
+await mcp.sendChatAction(conversationId: 'CONVERSATION_ID', action: ChatAction.uploadPhoto);
+await Future<void>.delayed(const Duration(seconds: 4));
+await mcp.sendChatAction(conversationId: 'CONVERSATION_ID', action: ChatAction.uploadPhoto);
+await mcp.sendLocalFile('CONVERSATION_ID', 'picture.png'); // or ChatAction.cancel if you give up
+
+// Search the GIF library (no query = trending) and send one.
+final found = SearchGifsResult.fromResult(await mcp.searchGifs(query: 'thumbs up', limit: 5));
+if (found.gifs.isNotEmpty) {
+  final sent = SendGifResult.fromResult(
+      await mcp.sendGif(conversationId: 'CONVERSATION_ID', gifId: found.gifs.first.gifId));
+  print(sent.messageId);
+}
+```
+
+`sendTyping(conversationId: ..., action: ChatAction.x)` takes the same optional action (default typing). An unknown action name is a `McpToolError`.
 
 ## Regenerating the tools
 

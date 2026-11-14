@@ -31,12 +31,12 @@ void main() {
       late MockServer s;
       setUp(() => s = mode == 'json' ? json : sse);
 
-      test('initialize and list all 124 tools', () async {
+      test('initialize and list all 127 tools', () async {
         final c = mk(s);
         final info = await c.initialize();
         expect(info['serverInfo'], isA<Map>());
         final tools = await c.listTools();
-        expect(tools.length, 124);
+        expect(tools.length, 127);
         expect(tools.map((t) => t['name']), containsAll(toolNames));
         c.close();
       });
@@ -234,6 +234,73 @@ void main() {
           tokenInPath: true,
           backoffBase: const Duration(milliseconds: 5));
       expect((await c.whoami()).isError, isFalse);
+    });
+  });
+
+  group('chat actions and gifs', () {
+    for (final mode in ['json', 'sse']) {
+      test('sendChatAction and sendTyping ($mode)', () async {
+        final s = mode == 'json' ? json : sse;
+        final c = mk(s);
+        final conv = 'conv-act-$mode';
+        expect(ChatAction.values.length, 11);
+        expect(ChatAction.uploadVideoNote.wire, 'upload_video_note');
+        await c.sendChatAction(
+            conversationId: conv, action: ChatAction.uploadPhoto);
+        await c.sendChatAction(conversationId: conv, action: ChatAction.cancel);
+        await c.sendTyping(conversationId: conv); // backward compatible
+        await c.sendTyping(
+            conversationId: conv, action: ChatAction.recordVoice);
+        final mine = [
+          for (final a in await s.actions())
+            if (a['conversation_id'] == conv) a['action'],
+        ];
+        expect(mine, ['upload_photo', 'cancel', 'typing', 'record_voice']);
+      });
+    }
+
+    test('unknown chat action is a tool error', () async {
+      final c = mk(json);
+      expect(
+          () => c.callTool(
+              'send_chat_action', {'conversation_id': 'c', 'action': 'dance'}),
+          throwsA(isA<McpToolError>().having(
+              (e) => e.message, 'message', contains('unknown action'))));
+    });
+
+    test('searchGifs and sendGif have typed results', () async {
+      final c = mk(json, model: 'Test Model');
+      final trending = SearchGifsResult.fromResult(await c.searchGifs());
+      expect(trending.gifs.length, 6);
+      expect(trending.busy, isFalse);
+      final found = SearchGifsResult.fromResult(
+          await c.searchGifs(query: 'thumbs up', limit: 1));
+      expect(found.gifs.map((g) => g.gifId), ['gif-001']);
+      final g = found.gifs.single;
+      expect(g.width, 480);
+      expect(g.contentType, 'image/gif');
+      expect(g.source, 'library');
+      expect(g.previewUrl, startsWith('http'));
+      expect(
+          SearchGifsResult.fromResult(await c.searchGifs(query: 'busy')).busy,
+          isTrue);
+      final sent = SendGifResult.fromResult(await c.sendGif(
+          conversationId: 'conv-gif', gifId: g.gifId, caption: 'nice'));
+      expect(sent.gifId, 'gif-001');
+      expect(sent.conversationId, 'conv-gif');
+      expect(sent.messageId, startsWith('msg-gif-'));
+      expect(sent.attachmentId, startsWith('att-gif-'));
+      expect(sent.sentViaGrantName, isNull);
+    });
+
+    test('gif errors', () async {
+      final c = mk(json, model: 'Test Model');
+      expect(() => c.searchGifs(limit: 26), throwsA(isA<McpToolError>()));
+      expect(() => c.sendGif(conversationId: 'c', gifId: 'nope'),
+          throwsA(isA<McpToolError>()));
+      final bare = mk(json);
+      expect(() => bare.sendGif(conversationId: 'c', gifId: 'gif-001'),
+          throwsArgumentError);
     });
   });
 

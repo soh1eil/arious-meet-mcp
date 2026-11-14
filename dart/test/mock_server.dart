@@ -41,6 +41,12 @@ class MockServer {
     return (jsonDecode(r.body) as Map)['log'] as List;
   }
 
+  Future<List<Map<String, dynamic>>> actions() async {
+    final r = await http.get(Uri.parse('$origin/__mock/log'));
+    return ((jsonDecode(r.body) as Map)['actions'] as List)
+        .cast<Map<String, dynamic>>();
+  }
+
   Future<void> push(String token, List<Map<String, dynamic>> items) async {
     await http.post(Uri.parse('$origin/__mock/push'),
         body: jsonEncode({'token': token, 'items': items}));

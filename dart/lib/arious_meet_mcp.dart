@@ -6,6 +6,7 @@
 /// ```
 library;
 
+export 'src/chat_action.dart';
 export 'src/client.dart';
 export 'src/errors.dart';
 export 'src/helpers.dart';

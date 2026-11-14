@@ -2,6 +2,7 @@
 
 // ignore_for_file: unnecessary_brace_in_string_interps
 
+import 'chat_action.dart';
 import 'client.dart';
 
 /// Per-tool facts used by [McpClient] (model_name injection, retry safety).
@@ -91,6 +92,7 @@ const Map<String, ToolTraits> toolTraits = {
   'rename_self': ToolTraits(safeToRepeat: true),
   'set_name_style': ToolTraits(safeToRepeat: true),
   'send_typing': ToolTraits(safeToRepeat: true),
+  'send_chat_action': ToolTraits(safeToRepeat: true),
   'add_contact': ToolTraits(safeToRepeat: true),
   'set_contact_nickname': ToolTraits(safeToRepeat: true),
   'ring': ToolTraits(hasModelName: true, requiresModelName: true),
@@ -140,6 +142,8 @@ const Map<String, ToolTraits> toolTraits = {
   'set_org_folder_access': ToolTraits(safeToRepeat: true),
   'list_emoji_packs': ToolTraits(safeToRepeat: true),
   'get_user_profile': ToolTraits(safeToRepeat: true),
+  'search_gifs': ToolTraits(safeToRepeat: true),
+  'send_gif': ToolTraits(hasModelName: true, requiresModelName: true),
 };
 
 /// Names of every tool this SDK was generated for.
@@ -221,6 +225,7 @@ const List<String> toolNames = [
   'rename_self',
   'set_name_style',
   'send_typing',
+  'send_chat_action',
   'add_contact',
   'set_contact_nickname',
   'ring',
@@ -268,6 +273,8 @@ const List<String> toolNames = [
   'set_org_folder_access',
   'list_emoji_packs',
   'get_user_profile',
+  'search_gifs',
+  'send_gif',
 ];
 
 /// One typed method per server tool. Required arguments are `required`
@@ -2248,11 +2255,46 @@ extension AriousTools on McpClient {
 
   /// Shows a 'typing…' notice to this conversation's other members for a few
   /// seconds — the same notice a person's own keyboard raises. Call it right
-  /// before a reply that will take a while, not on every character.
+  /// before a reply that will take a while, not on every character. Optional
+  /// action shows a different notice instead (upload_photo, record_voice, ...;
+  /// cancel clears it): the same as send_chat_action.
   ///
   /// Tool: `send_typing`.
-  Future<ToolResult> sendTyping({required String conversationId}) =>
+  ///
+  /// [action] What you are doing: typing, upload_photo, upload_video,
+  /// record_voice, upload_voice, upload_document, record_video_note,
+  /// upload_video_note, choose_sticker, find_location. cancel clears it. The
+  /// notice lasts about 5 seconds; repeat it every ~4 seconds while the work
+  /// goes on. One of: typing, upload_photo, upload_video, record_voice,
+  /// upload_voice, upload_document, record_video_note, upload_video_note,
+  /// choose_sticker, find_location, cancel.
+  Future<ToolResult> sendTyping(
+          {required String conversationId, ChatAction? action}) =>
       callTool('send_typing', {
+        'action': action?.wire,
+        'conversation_id': conversationId,
+      });
+
+  /// Shows what you are doing to this conversation's other members for about 5
+  /// seconds, like a person's app does: typing, upload_photo, upload_video,
+  /// record_voice, upload_voice, upload_document, record_video_note,
+  /// upload_video_note, choose_sticker, find_location. Use cancel to clear it
+  /// early. Repeat every ~4 seconds while the work goes on. Never stored;
+  /// reaches only people you may still reach.
+  ///
+  /// Tool: `send_chat_action`.
+  ///
+  /// [action] What you are doing: typing, upload_photo, upload_video,
+  /// record_voice, upload_voice, upload_document, record_video_note,
+  /// upload_video_note, choose_sticker, find_location. cancel clears it. The
+  /// notice lasts about 5 seconds; repeat it every ~4 seconds while the work
+  /// goes on. One of: typing, upload_photo, upload_video, record_voice,
+  /// upload_voice, upload_document, record_video_note, upload_video_note,
+  /// choose_sticker, find_location, cancel.
+  Future<ToolResult> sendChatAction(
+          {required ChatAction action, required String conversationId}) =>
+      callTool('send_chat_action', {
+        'action': action.wire,
         'conversation_id': conversationId,
       });
 
@@ -3164,5 +3206,58 @@ extension AriousTools on McpClient {
         'conversation_id': conversationId,
         'user_id': userId,
         'username': username,
+      });
+
+  /// Find a GIF in the app's GIF library, the same one people pick from. An
+  /// empty query lists what is trending. Each result has gif_id (pass it to
+  /// send_gif), title, width, height, preview_url (a link on this server, valid
+  /// for an hour, that you can fetch to look at the GIF) and source. Limit
+  /// 1-25, default 10. Fails with a clear message when GIFs are switched off on
+  /// this server.
+  ///
+  /// Tool: `search_gifs`.
+  ///
+  /// [limit] How many results, default 10.
+  ///
+  /// [query] What to look for. Empty or omitted = trending.
+  Future<ToolResult> searchGifs({int? limit, String? query}) =>
+      callTool('search_gifs', {
+        'limit': limit,
+        'query': query,
+      });
+
+  /// Send a GIF from the app's GIF library (find one with search_gifs) into a
+  /// conversation, as a real GIF message exactly like a person's. REQUIRES
+  /// model_name (your real model name), appended as the signature. Optional
+  /// caption (at most 3000 characters), reply_to_id, topic_id, silent. The
+  /// group's "send stickers and GIFs" permission and its rate limits apply. To
+  /// send your own GIF file use upload_file + send_file instead.
+  ///
+  /// Tool: `send_gif`.
+  ///
+  /// [gifId] A gif_id from search_gifs.
+  ///
+  /// [modelName] Your real model name, e.g. "Claude Sonnet 5".
+  ///
+  /// [silent] Send with no sound.
+  ///
+  /// [topicId] Optional: "general" or an id from list_topics. A reply goes into
+  /// the topic of the message it answers.
+  Future<ToolResult> sendGif(
+          {required String conversationId,
+          required String gifId,
+          String? caption,
+          String? modelName,
+          String? replyToId,
+          bool? silent,
+          String? topicId}) =>
+      callTool('send_gif', {
+        'caption': caption,
+        'conversation_id': conversationId,
+        'gif_id': gifId,
+        'model_name': modelName,
+        'reply_to_id': replyToId,
+        'silent': silent,
+        'topic_id': topicId,
       });
 }
