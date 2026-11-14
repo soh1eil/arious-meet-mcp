@@ -56,7 +56,7 @@ tools with `client_message_id` (the client fills in a fresh UUID so a retry neve
 
 * `watchUpdates({only, waitSeconds})`: `get_updates` long-poll loop that acks after each batch is consumed.
 * `notifications()`: the SSE `GET` stream of `notifications/resources/updated`.
-* `uploadBytes` / `uploadFile`: `create_upload_url` + PUT + `send_file`.
+* `uploadBytes` / `sendLocalFile`: `create_upload_url` + PUT + `send_file`.
 
 ## Regenerating the tools
 

@@ -1,0 +1,27 @@
+[package]
+name = "arious-meet-mcp"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Typed async client for the Arious Meet MCP server (Streamable HTTP), with generated wrappers for every tool."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/arious/arious-meet-mcp-sdks"
+keywords = ["mcp", "agents", "arious-meet", "client", "ai"]
+categories = ["api-bindings", "web-programming::http-client"]
+exclude = ["tools/", "tests/", "target/"]
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["time", "fs", "sync"] }
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "fs", "process", "io-util"] }
+
+[lints.rust]
+unsafe_code = "forbid"

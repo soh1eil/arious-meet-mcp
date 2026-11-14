@@ -86,7 +86,7 @@ extension AriousHelpers on McpClient {
 
   /// Uploads a local file and sends it as its own message. Returns the
   /// `send_file` result.
-  Future<ToolResult> uploadFile(
+  Future<ToolResult> sendLocalFile(
     String conversationId,
     String path, {
     String? caption,
