@@ -33,6 +33,7 @@ Endpoint: `https://api.ariousmeet.com/v1/mcp` (MCP over Streamable HTTP, `Author
 - Retries with backoff on rate limits (honours `Retry-After`) and transient errors — and never a duplicate message: tools that change state are retried only when they carry an idempotency key, which the SDK sets for you.
 - Typed errors: auth, rate limit, tool error, protocol, transport.
 - Helpers: watch for new messages (long-poll + ack), send a message, upload and send a file.
+- **Arious Context** (0.3.0): typed `context_resume`, `context_checkpoint` and `start_here` results, a conflict error when a checkpoint loses a race (`ContextConflict`), and `list_prompts` / `get_prompt` for the server's MCP prompts (`start`, `resume`). Each SDK README has a section and a runnable "resume where another agent left off" example.
 
 ## Tested
 
