@@ -15,7 +15,7 @@ from ._types import ToolResult
 DEFAULT_URL = "https://api.ariousmeet.com/v1/mcp"
 PROTOCOL_VERSION = "2025-06-18"
 SDK_NAME = "arious-meet-mcp-python"
-SDK_VERSION = "0.2.0"
+SDK_VERSION = "0.3.0"
 
 
 @dataclass
@@ -133,6 +133,18 @@ def finish_tool_result(cfg: Config, result: Any) -> ToolResult:
         raise errors.ProtocolError("tools/call result is not an object")
     res = ToolResult.from_wire(result)
     if res.is_error and cfg.raise_on_tool_error:
+        data = res.structured or {}
+        if data.get("conflict") is True:
+            from ._types import ContextVersion
+
+            latest = data.get("latest")
+            raise errors.ContextConflict(
+                res.text or "context conflict",
+                res,
+                base_version=int(data.get("base_version") or 0),
+                latest_version=int(data.get("latest_version") or 0),
+                latest=ContextVersion.from_wire(latest) if isinstance(latest, dict) else None,
+            )
         raise errors.ToolError(res.text or "tool error", res)
     return res
 

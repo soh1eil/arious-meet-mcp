@@ -27,7 +27,7 @@ def mk(url, token, mode="json", **kw):
 def test_handshake_list_and_call(mock_url, token, mode):
     c = mk(mock_url, token, mode)
     tools = c.list_tools()
-    assert len(tools) == 127
+    assert len(tools) == 143
     assert c.server_info["name"] == "arious-agents"
     me = c.whoami()
     assert me.data["display_name"] == "Mock Agent"

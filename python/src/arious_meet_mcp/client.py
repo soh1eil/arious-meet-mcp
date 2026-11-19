@@ -15,7 +15,7 @@ import httpx
 from . import _core as core
 from . import errors
 from ._generated import ToolsMixin
-from ._types import ToolResult
+from ._types import Prompt, PromptResult, ToolResult
 
 Tool = dict[str, Any]
 
@@ -155,6 +155,27 @@ class Client(ToolsMixin):
         self._ensure_initialized()
         result = self._rpc("tools/list")
         return list((result or {}).get("tools", []))
+
+    def list_prompts(self) -> list[Prompt]:
+        """List the MCP prompts the server offers (``start`` and ``resume``)."""
+        self._ensure_initialized()
+        result = self._rpc("prompts/list")
+        raw = (result or {}).get("prompts", [])
+        return [Prompt.from_wire(p) for p in raw if isinstance(p, dict)]
+
+    def get_prompt(self, name: str, arguments: dict[str, str] | None = None) -> PromptResult:
+        """Fetch a prompt as ready-made messages.
+
+        Example: ``get_prompt("resume", {"context_id": "..."})``.
+
+        A refusal (unknown prompt, contexts off, nothing to resume) is a ProtocolError.
+        """
+        self._ensure_initialized()
+        params: dict[str, Any] = {"name": name}
+        if arguments:
+            params["arguments"] = {k: str(v) for k, v in arguments.items()}
+        result = self._rpc("prompts/get", params)
+        return PromptResult.from_wire(result if isinstance(result, dict) else {})
 
     def ping(self) -> None:
         self._ensure_initialized()

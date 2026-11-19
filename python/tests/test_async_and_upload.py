@@ -20,7 +20,7 @@ def base(mock_url):
 async def test_async_basic_and_sse(mock_url, token):
     async with AsyncClient(token, url=mock_url, model_name="M", backoff=0.01) as c:
         c._http.headers["X-Mock-Mode"] = "sse"
-        assert len(await c.list_tools()) == 127
+        assert len(await c.list_tools()) == 143
         assert (await c.whoami()).data["agent_id"] == "agent-1"
         m = await c.send_message("conv", "hi")
         assert m.data["text"].endswith("M")

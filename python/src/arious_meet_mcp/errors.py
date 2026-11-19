@@ -58,3 +58,27 @@ class ToolError(AriousError):
     def __init__(self, message: str, result: Any = None) -> None:
         super().__init__(message)
         self.result = result
+
+
+class ContextConflict(ToolError):
+    """``context_checkpoint`` lost a race: someone else wrote a newer version.
+
+    ``base_version`` is the version you built on, ``latest_version`` the one the
+    server holds now and ``latest`` its full content (a :class:`ContextVersion`),
+    so you can merge your changes into it and checkpoint again with
+    ``base_version=err.latest_version``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        result: Any = None,
+        *,
+        base_version: int = 0,
+        latest_version: int = 0,
+        latest: Any = None,
+    ) -> None:
+        super().__init__(message, result)
+        self.base_version = base_version
+        self.latest_version = latest_version
+        self.latest = latest
