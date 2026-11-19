@@ -40,7 +40,7 @@ public sealed class McpClientOptions
 public sealed partial class McpClient : IDisposable
 {
     public const string ProtocolVersion = "2025-06-18";
-    private const string SdkVersion = "0.2.0";
+    private const string SdkVersion = "0.3.0";
 
     private readonly McpClientOptions _o;
     private readonly string _token;
@@ -161,6 +161,39 @@ public sealed partial class McpClient : IDisposable
         return (r["tools"] as JsonArray)?.OfType<JsonObject>().ToList() ?? [];
     }
 
+    /// <summary><c>prompts/list</c>: the MCP prompts the server offers (<c>start</c> and <c>resume</c>).</summary>
+    public async Task<IReadOnlyList<Prompt>> ListPromptsAsync(CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var r = await RpcAsync("prompts/list", new JsonObject(), true, ct).ConfigureAwait(false);
+        return (r["prompts"] as JsonArray)?.OfType<JsonObject>().Select(Prompt.From).ToList() ?? [];
+    }
+
+    /// <summary>
+    /// <c>prompts/get</c>: a prompt as ready-made messages, e.g.
+    /// <c>GetPromptAsync("resume", new Dictionary&lt;string, string&gt; { ["context_id"] = id })</c>.
+    /// A refusal (unknown prompt, contexts off, nothing to resume) is a <see cref="McpProtocolException"/>.
+    /// </summary>
+    public async Task<PromptResult> GetPromptAsync(
+        string name,
+        IReadOnlyDictionary<string, string>? arguments = null,
+        CancellationToken ct = default)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var p = new JsonObject { ["name"] = name };
+        if (arguments is { Count: > 0 })
+        {
+            var a = new JsonObject();
+            foreach (var kv in arguments)
+            {
+                a[kv.Key] = kv.Value;
+            }
+            p["arguments"] = a;
+        }
+        var r = await RpcAsync("prompts/get", p, true, ct).ConfigureAwait(false);
+        return PromptResult.From(r);
+    }
+
     /// <summary><c>ping</c>.</summary>
     public async Task PingAsync(CancellationToken ct = default)
     {
@@ -223,7 +256,12 @@ public sealed partial class McpClient : IDisposable
         var result = new ToolResult(text, (JsonArray)content.DeepClone(), res["structuredContent"] as JsonObject, isError);
         if (isError && throwOnError)
         {
-            throw new McpToolException(text, name);
+            if (result.Structured?["conflict"] is JsonValue cv && cv.TryGetValue<bool>(out var conflict) && conflict)
+            {
+                var cp = CheckpointResult.From(result);
+                throw new ContextConflictException(text, result, cp.BaseVersion ?? 0, cp.LatestVersion ?? 0, cp.Latest);
+            }
+            throw new McpToolException(text, name, result);
         }
         return result;
     }

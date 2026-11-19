@@ -20,9 +20,34 @@ public sealed class McpRateLimitException(string message, TimeSpan? retryAfter =
 }
 
 /// <summary>The tool ran and answered <c>isError: true</c>.</summary>
-public sealed class McpToolException(string message, string? tool = null) : McpException(message)
+public class McpToolException(string message, string? tool = null, ToolResult? result = null) : McpException(message)
 {
     public string? Tool { get; } = tool;
+
+    /// <summary>The full refused result (structured content included), when known.</summary>
+    public ToolResult? Result { get; } = result;
+}
+
+/// <summary>
+/// <c>context_checkpoint</c> lost a race: someone else wrote a newer version. Merge your changes into
+/// <see cref="Latest"/> and checkpoint again with <c>baseVersion: LatestVersion</c>. It is a
+/// <see cref="McpToolException"/>, so existing handlers keep working.
+/// </summary>
+public sealed class ContextConflictException(
+    string message,
+    ToolResult result,
+    long baseVersion,
+    long latestVersion,
+    ContextVersion? latest) : McpToolException(message, "context_checkpoint", result)
+{
+    /// <summary>The version you built on.</summary>
+    public long BaseVersion { get; } = baseVersion;
+
+    /// <summary>The version the server holds now.</summary>
+    public long LatestVersion { get; } = latestVersion;
+
+    /// <summary>The latest version's content, when the server sent it.</summary>
+    public ContextVersion? Latest { get; } = latest;
 }
 
 /// <summary>A JSON-RPC level error (unknown method/tool, invalid params, ...).</summary>

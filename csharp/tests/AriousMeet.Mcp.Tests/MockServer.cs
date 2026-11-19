@@ -81,6 +81,12 @@ public sealed class MockServer : IDisposable
         return arr.Select(a => ((string)a!["conversation_id"]!, (string)a!["action"]!)).ToList();
     }
 
+    public async Task ControlAsync(string path, string json)
+    {
+        using var r = await Http.PostAsync(Origin + path, new StringContent(json, Encoding.UTF8, "application/json"));
+        r.EnsureSuccessStatusCode();
+    }
+
     public async Task PushAsync(string token, string itemsJson)
     {
         var body = $"{{\"token\":\"{token}\",\"items\":{itemsJson}}}";

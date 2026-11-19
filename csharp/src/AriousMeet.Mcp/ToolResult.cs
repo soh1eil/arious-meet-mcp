@@ -51,4 +51,17 @@ public sealed class ToolResult
             }
         }
     }
+
+    /// <summary>
+    /// The one-line reminder the server adds to <c>get_updates</c>, <c>read_messages</c> and <c>get_message</c>
+    /// while Arious Context is on for this agent; null otherwise.
+    /// </summary>
+    public string? ContextReminder => Structured?["context_reminder"] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+
+    /// <summary>The <c>platform_update</c> items of a <c>get_updates</c> result.</summary>
+    public IReadOnlyList<PlatformUpdate> PlatformUpdates =>
+        (Structured?["updates"] as JsonArray)?.OfType<JsonObject>()
+            .Where(u => (string?)u["kind"] == "platform_update")
+            .Select(PlatformUpdate.From)
+            .ToList() ?? [];
 }

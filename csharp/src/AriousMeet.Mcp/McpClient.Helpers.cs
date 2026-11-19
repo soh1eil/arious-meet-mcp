@@ -51,7 +51,7 @@ public sealed partial class McpClient
             {
                 if (updates.Count > 0)
                 {
-                    await AckUpdatesAsync(next, ct).ConfigureAwait(false);
+                    await AckUpdatesAsync(cursor: next, ct: ct).ConfigureAwait(false);
                 }
                 cursor = next;
             }

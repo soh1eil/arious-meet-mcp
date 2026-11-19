@@ -8,17 +8,17 @@ public class MockSuiteTests
     [Theory]
     [InlineData("json")]
     [InlineData("sse")]
-    public async Task HandshakeListsAll127Tools(string mode)
+    public async Task HandshakeListsAll143Tools(string mode)
     {
         using var m = MockServer.Start(mode);
         using var c = m.Client();
         var info = await c.InitializeAsync();
         Assert.NotNull(info["serverInfo"]);
         var tools = await c.ListToolsAsync();
-        Assert.Equal(127, tools.Count);
+        Assert.Equal(143, tools.Count);
         var names = tools.Select(t => (string)t["name"]!).ToHashSet();
         Assert.All(McpClient.ToolNames, n => Assert.Contains(n, names));
-        Assert.Equal(127, McpClient.ToolNames.Count);
+        Assert.Equal(143, McpClient.ToolNames.Count);
     }
 
     [Theory]
