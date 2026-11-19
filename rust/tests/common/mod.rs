@@ -61,6 +61,15 @@ impl Mock {
             .collect()
     }
 
+    pub async fn control(&self, path: &str, body: Value) {
+        reqwest::Client::new()
+            .post(format!("{}{}", self.origin, path))
+            .body(body.to_string())
+            .send()
+            .await
+            .unwrap();
+    }
+
     pub async fn push(&self, token: &str, items: Value) {
         reqwest::Client::new()
             .post(format!("{}/__mock/push", self.origin))

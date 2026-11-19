@@ -9,6 +9,7 @@ use tokio::sync::OnceCell;
 use crate::error::{Error, Result};
 use crate::sse::{parse_sse_data, SseParser};
 use crate::tools::traits_for;
+use crate::types::{PlatformUpdate, Prompt, PromptMessage, PromptResult};
 
 pub const DEFAULT_BASE_URL: &str = "https://api.ariousmeet.com/v1/mcp";
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -42,6 +43,32 @@ impl ToolResult {
             return s.clone();
         }
         serde_json::from_str(&self.text).unwrap_or_else(|_| Value::String(self.text.clone()))
+    }
+
+    /// The one-line reminder the server adds to `get_updates`, `read_messages` and `get_message`
+    /// while Arious Context is on for this agent; `None` otherwise.
+    pub fn context_reminder(&self) -> Option<String> {
+        self.structured
+            .as_ref()?
+            .get("context_reminder")?
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    }
+
+    /// The `platform_update` items of a `get_updates` result.
+    pub fn platform_updates(&self) -> Vec<PlatformUpdate> {
+        self.structured
+            .as_ref()
+            .and_then(|s| s.get("updates"))
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter(|u| u["kind"] == "platform_update")
+                    .filter_map(|u| serde_json::from_value(u.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Deserialize [`ToolResult::data`] into a typed model, for example
@@ -265,6 +292,61 @@ impl Client {
             .unwrap_or_default())
     }
 
+    /// `prompts/list`: the MCP prompts the server offers (`start` and `resume`).
+    pub async fn list_prompts(&self) -> Result<Vec<Prompt>> {
+        self.initialize().await?;
+        let r = self.rpc("prompts/list", json!({}), true).await?;
+        Ok(r.get("prompts")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|p| serde_json::from_value(p.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// `prompts/get`: a prompt as ready-made messages, for example
+    /// `get_prompt("resume", [("context_id", id)])`. A refusal (unknown prompt, contexts off,
+    /// nothing to resume) is an [`Error::Protocol`].
+    pub async fn get_prompt<K, V, I>(&self, name: &str, arguments: I) -> Result<PromptResult>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.initialize().await?;
+        let args: Map<String, Value> = arguments
+            .into_iter()
+            .map(|(k, v)| (k.into(), Value::String(v.into())))
+            .collect();
+        let mut params = json!({"name": name});
+        if !args.is_empty() {
+            params["arguments"] = Value::Object(args);
+        }
+        let r = self.rpc("prompts/get", params, true).await?;
+        let messages = r
+            .get("messages")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .map(|m| PromptMessage {
+                        role: m["role"].as_str().unwrap_or("user").to_string(),
+                        text: m["content"]["text"]
+                            .as_str()
+                            .or_else(|| m["content"].as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(PromptResult {
+            description: r["description"].as_str().unwrap_or("").to_string(),
+            messages,
+        })
+    }
+
     /// `ping`.
     pub async fn ping(&self) -> Result<()> {
         self.initialize().await?;
@@ -275,10 +357,22 @@ impl Client {
     pub async fn call_tool(&self, name: &str, arguments: Value) -> Result<ToolResult> {
         let r = self.call_tool_raw(name, arguments).await?;
         if r.is_error {
+            let result = json!({"content": r.content, "structuredContent": r.structured});
+            if let Some(c) = r.structured.as_ref().filter(|s| s["conflict"] == true) {
+                return Err(Error::ContextConflict {
+                    message: r.text.clone(),
+                    base_version: c["base_version"].as_i64().unwrap_or(0),
+                    latest_version: c["latest_version"].as_i64().unwrap_or(0),
+                    latest: serde_json::from_value(c["latest"].clone())
+                        .ok()
+                        .map(Box::new),
+                    result,
+                });
+            }
             return Err(Error::Tool {
                 tool: name.to_string(),
                 message: r.text.clone(),
-                result: json!({"content": r.content, "structuredContent": r.structured}),
+                result,
             });
         }
         Ok(r)

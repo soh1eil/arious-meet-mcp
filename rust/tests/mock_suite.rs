@@ -12,12 +12,12 @@ async fn handshake_lists_all_tools_in_both_modes() {
         let info = c.initialize().await.unwrap();
         assert!(info["serverInfo"].is_object(), "{mode}");
         let tools = c.list_tools().await.unwrap();
-        assert_eq!(tools.len(), 127, "{mode}");
+        assert_eq!(tools.len(), 143, "{mode}");
         let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
         for n in TOOL_NAMES {
             assert!(names.contains(n), "missing {n}");
         }
-        assert_eq!(TOOL_NAMES.len(), 127);
+        assert_eq!(TOOL_NAMES.len(), 143);
     }
 }
 

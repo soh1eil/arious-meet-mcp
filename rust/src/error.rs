@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+use crate::types::ContextVersion;
+
 /// Every error this crate returns.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -21,6 +23,21 @@ pub enum Error {
     Tool {
         tool: String,
         message: String,
+        result: Value,
+    },
+
+    /// `context_checkpoint` lost a race: someone else wrote a newer version. Merge your changes
+    /// into `latest` and checkpoint again with `base_version` set to `latest_version`.
+    #[error("context conflict: {message}")]
+    ContextConflict {
+        message: String,
+        /// The version you built on.
+        base_version: i64,
+        /// The version the server holds now.
+        latest_version: i64,
+        /// The latest version's content, when the server sent it.
+        latest: Option<Box<ContextVersion>>,
+        /// The full refused result, as in [`Error::Tool`].
         result: Value,
     },
 

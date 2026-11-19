@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::client::{Client, ToolResult};
 use crate::error::{Error, Result};
-use crate::tools::{GetUpdatesOpts, SendFileOpts};
+use crate::tools::{AckUpdatesOpts, GetUpdatesOpts, SendFileOpts};
 
 /// Options for [`Client::watch_updates`].
 #[derive(Debug, Clone)]
@@ -87,7 +87,11 @@ impl Client {
             }
             if let Some(n) = next {
                 if !updates.is_empty() {
-                    self.ack_updates(n.clone()).await?;
+                    self.ack_updates(AckUpdatesOpts {
+                        cursor: Some(n.clone()),
+                        ..Default::default()
+                    })
+                    .await?;
                 }
                 cursor = Some(n);
             }

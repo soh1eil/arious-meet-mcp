@@ -23,4 +23,9 @@ pub use error::{Error, Result};
 pub use helpers::WatchOptions;
 pub use sse::{parse_sse_data, SseParser};
 pub use tools::*;
-pub use types::{ChatAction, Gif, SearchGifsResult, SendGifResult};
+pub use types::{
+    ChatAction, CheckpointResult, ContextArtifact, ContextAuthor, ContextDecision, ContextResume,
+    ContextVersion, Gif, PlatformUpdate, Prompt, PromptArgument, PromptMessage, PromptResult,
+    Redaction, SearchGifsResult, SendGifResult, StartHere, StartHereConversation,
+    StartHereIdentity, StartHereLastContext, StartHereOwnerBrief, StartHereUpdates,
+};

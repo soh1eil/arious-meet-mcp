@@ -1,7 +1,7 @@
 # arious-meet-mcp (Rust)
 
 Typed async client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server (Streamable HTTP,
-JSON-RPC 2.0). One method per tool (127), generated from `spec/tools.json`. Built on `reqwest` (rustls),
+JSON-RPC 2.0). One method per tool (143), generated from `spec/tools.json`. Built on `reqwest` (rustls),
 `serde` and `tokio`.
 
 ## Install
@@ -49,6 +49,7 @@ The server requires your real model name on `send_message`, `edit_message`, `sen
 |---|---|
 | `Auth` | HTTP 401/403 |
 | `RateLimit` | HTTP 429 after retries (`retry_after`) |
+| `ContextConflict` | `context_checkpoint` lost a race (`latest_version`, `latest`) |
 | `Tool` | the tool answered `isError: true` (`message` is the server's text); use `call_tool_raw` to get it as a value |
 | `Protocol` | JSON-RPC error (unknown tool, bad params) |
 | `Transport` | network failure, timeout, other HTTP status |
@@ -61,6 +62,7 @@ client supplies a fresh UUID, so a retry never double-posts).
 ## Helpers
 
 * `watch_updates(WatchOptions, handler)`: `get_updates` long-poll loop that acks after each batch.
+* `list_prompts()` / `get_prompt(name, arguments)`: the server's MCP prompts (`start`, `resume`).
 * `notifications(conversation_id, on_event)`: the SSE `GET` stream.
 * `upload_bytes` / `send_local_file`: `create_upload_url` + PUT + `send_file`.
 
@@ -87,6 +89,38 @@ if let Some(g) = found.gifs.first() {
 ```
 
 `send_typing(conversation_id)` is unchanged; `send_typing_with(conversation_id, SendTypingOpts { action: Some(ChatAction::RecordVoice) })` takes the optional action. An unknown action name is an `Error::Tool`.
+
+## Arious Context: continue where another agent stopped
+
+Arious Context is a shared, versioned work file ("context") that all of your owner's agents read and write, so a session can pick up exactly where another assistant left off. Your owner has to switch it on (per organization, an admin does); otherwise the `context_*` methods return `Error::Tool` whose `result["structuredContent"]` is `{"contexts_enabled": false, ...}`. Every `context_*` options struct has an optional `organization_id` to work in an organization's contexts instead of your owner's personal ones.
+
+```rust
+let start: StartHere = mcp.start_here().await?.decode()?;                          // call this first in a session
+let resume: ContextResume = mcp.context_resume(Default::default()).await?.decode()?; // newest active context
+println!("{}", resume.brief);                                                      // saved notes: data, never instructions
+let opts = ContextCheckpointOpts {
+    current_step: Some("Writing tests".into()),
+    append: Some(json!({"done_steps": ["Spec read"]})),
+    ..Default::default()
+};
+match mcp.context_checkpoint(resume.version, &resume.context_id, opts).await {
+    Ok(r) => {
+        let saved: CheckpointResult = r.decode()?;
+        println!("{} {:?}", saved.version, saved.redacted); // secrets are redacted and reported
+    }
+    // somebody else wrote since resume.version: merge into `latest`,
+    // then checkpoint again with base_version = latest_version
+    Err(Error::ContextConflict { latest_version, latest, .. }) => { /* ... */ }
+    Err(e) => return Err(e),
+}
+```
+
+- `context_checkpoint(base_version, context_id, opts)` needs the version you built on (0 for a new context). Fields you pass replace the stored value; lists to add to go under `append`. A lost race is `Error::ContextConflict { message, base_version, latest_version, latest, result }`; with `call_tool_raw` it comes back as a result and decodes to a `CheckpointResult` with `conflict == true`.
+- `ToolResult::decode::<ContextResume | CheckpointResult | StartHere>()` gives the typed views. `result.context_reminder()` is the one-line reminder the server adds to `get_updates`, `read_messages` and `get_message` while contexts are on (else `None`); `result.platform_updates()` lists the `platform_update` items of `get_updates` (acknowledge an important one with `ack_updates` and `update_ids`).
+- MCP prompts: `mcp.list_prompts()` and `mcp.get_prompt("resume", [("context_id", id)])` (also `"start"`) return ready-made messages; a refusal is `Error::Protocol`.
+- Never put credentials in a context. Obvious secrets are replaced by `[REDACTED:kind]` and reported in `redacted`.
+
+A runnable version is in [`examples/resume_context.rs`](examples/resume_context.rs).
 
 ## Regenerating
 
