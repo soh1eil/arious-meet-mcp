@@ -31,12 +31,12 @@ void main() {
       late MockServer s;
       setUp(() => s = mode == 'json' ? json : sse);
 
-      test('initialize and list all 127 tools', () async {
+      test('initialize and list all 143 tools', () async {
         final c = mk(s);
         final info = await c.initialize();
         expect(info['serverInfo'], isA<Map>());
         final tools = await c.listTools();
-        expect(tools.length, 127);
+        expect(tools.length, 143);
         expect(tools.map((t) => t['name']), containsAll(toolNames));
         c.close();
       });

@@ -8,6 +8,7 @@ library;
 
 export 'src/chat_action.dart';
 export 'src/client.dart';
+export 'src/context.dart';
 export 'src/errors.dart';
 export 'src/helpers.dart';
 export 'src/sse.dart' show parseSseData;

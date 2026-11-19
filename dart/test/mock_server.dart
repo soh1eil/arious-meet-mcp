@@ -52,6 +52,10 @@ class MockServer {
         body: jsonEncode({'token': token, 'items': items}));
   }
 
+  Future<void> control(String path, Map<String, dynamic> body) async {
+    await http.post(Uri.parse('$origin$path'), body: jsonEncode(body));
+  }
+
   Future<void> stop() async {
     _proc.kill();
     await _proc.exitCode;

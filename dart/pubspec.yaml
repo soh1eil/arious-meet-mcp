@@ -1,6 +1,6 @@
 name: arious_meet_mcp
 description: Typed Dart client for the Arious Meet MCP server (Streamable HTTP), with generated wrappers for every tool.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/arious/arious-meet-mcp-sdks
 topics:
   - mcp

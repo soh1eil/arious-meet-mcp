@@ -5,13 +5,14 @@ import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import 'context.dart';
 import 'errors.dart';
 import 'sse.dart';
 import 'tools.g.dart' show toolTraits;
 
 const String defaultBaseUrl = 'https://api.ariousmeet.com/v1/mcp';
 const String protocolVersion = '2025-06-18';
-const String sdkVersion = '0.2.0';
+const String sdkVersion = '0.3.0';
 
 /// The decoded result of a `tools/call`.
 class ToolResult {
@@ -159,6 +160,34 @@ class McpClient {
         .toList();
   }
 
+  /// `prompts/list`: the MCP prompts the server offers (`start` and `resume`).
+  Future<List<Prompt>> listPrompts() async {
+    await initialize();
+    final res = await _rpc('prompts/list', <String, dynamic>{}, retry: true);
+    return [
+      for (final p in (res['prompts'] as List? ?? const []))
+        Prompt.fromJson((p as Map).cast<String, dynamic>()),
+    ];
+  }
+
+  /// `prompts/get`: a prompt as ready-made messages, e.g.
+  /// `getPrompt('resume', {'context_id': id})`. A refusal (unknown prompt,
+  /// contexts off, nothing to resume) is an [McpProtocolError].
+  Future<PromptResult> getPrompt(
+    String name, [
+    Map<String, String>? arguments,
+  ]) async {
+    await initialize();
+    final res = await _rpc(
+        'prompts/get',
+        {
+          'name': name,
+          if (arguments != null && arguments.isNotEmpty) 'arguments': arguments,
+        },
+        retry: true);
+    return PromptResult.fromJson(res);
+  }
+
   /// `ping`.
   Future<void> ping() async {
     await initialize();
@@ -207,6 +236,17 @@ class McpClient {
       isError: res['isError'] == true,
     );
     if (out.isError && throwOnError) {
+      if (out.structured?['conflict'] == true) {
+        final c = CheckpointResult.fromResult(out);
+        throw McpContextConflict(
+          text,
+          tool: name,
+          result: res,
+          baseVersion: c.baseVersion ?? 0,
+          latestVersion: c.latestVersion ?? 0,
+          latest: c.latest,
+        );
+      }
       throw McpToolError(text, tool: name, result: res);
     }
     return out;
