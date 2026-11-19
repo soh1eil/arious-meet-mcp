@@ -26,16 +26,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 class McpClientTest {
   @ParameterizedTest
   @ValueSource(strings = {"json", "sse"})
-  void handshakeListsAll127Tools(String mode) throws Exception {
+  void handshakeListsAll143Tools(String mode) throws Exception {
     try (MockServer m = MockServer.start(mode);
         McpClient c = m.client()) {
       assertNotNull(c.initialize().get("serverInfo"));
       List<JsonNode> tools = c.listTools();
-      assertEquals(127, tools.size());
+      assertEquals(143, tools.size());
       Set<String> names = new HashSet<>();
       tools.forEach(t -> names.add(t.get("name").asText()));
       assertTrue(names.containsAll(ToolsBase.toolNames()));
-      assertEquals(127, ToolsBase.toolNames().size());
+      assertEquals(143, ToolsBase.toolNames().size());
     }
   }
 

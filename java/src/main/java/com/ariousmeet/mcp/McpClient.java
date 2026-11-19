@@ -36,7 +36,7 @@ import java.util.function.Predicate;
 public final class McpClient extends ToolsBase implements AutoCloseable {
   public static final String DEFAULT_BASE_URL = "https://api.ariousmeet.com/v1/mcp";
   public static final String PROTOCOL_VERSION = "2025-06-18";
-  private static final String SDK_VERSION = "0.2.0";
+  private static final String SDK_VERSION = "0.3.0";
   static final ObjectMapper JSON = new ObjectMapper();
 
   private final String token;
@@ -220,6 +220,35 @@ public final class McpClient extends ToolsBase implements AutoCloseable {
     return out;
   }
 
+  /** {@code prompts/list}: the MCP prompts the server offers ({@code start} and {@code resume}). */
+  public List<Prompt> listPrompts() {
+    initialize();
+    JsonNode r = rpc("prompts/list", JSON.createObjectNode(), true);
+    List<Prompt> out = new ArrayList<>();
+    for (JsonNode p : r.path("prompts")) {
+      out.add(Prompt.from(p));
+    }
+    return out;
+  }
+
+  /**
+   * {@code prompts/get}: a prompt as ready-made messages, e.g. {@code getPrompt("resume",
+   * Map.of("context_id", id))}. A refusal (unknown prompt, contexts off, nothing to resume) is a
+   * {@link McpException.Protocol}.
+   *
+   * @param name the prompt name
+   * @param arguments the prompt arguments, or null
+   */
+  public PromptResult getPrompt(String name, Map<String, String> arguments) {
+    initialize();
+    ObjectNode params = JSON.createObjectNode();
+    params.put("name", name);
+    if (arguments != null && !arguments.isEmpty()) {
+      params.set("arguments", JSON.valueToTree(arguments));
+    }
+    return PromptResult.from(rpc("prompts/get", params, true));
+  }
+
   /** {@code ping}. */
   public void ping() {
     initialize();
@@ -231,7 +260,11 @@ public final class McpClient extends ToolsBase implements AutoCloseable {
   public ToolResult callTool(String name, Map<String, Object> arguments) {
     ToolResult r = callToolRaw(name, arguments);
     if (r.isError()) {
-      throw new McpException.Tool(r.text(), name);
+      JsonNode sc = r.structured();
+      if (sc != null && sc.path("conflict").asBoolean(false)) {
+        throw new McpException.ContextConflict(r.text(), name, r, CheckpointResult.from(r));
+      }
+      throw new McpException.Tool(r.text(), name, r);
     }
     return r;
   }
@@ -394,7 +427,7 @@ public final class McpClient extends ToolsBase implements AutoCloseable {
       }
       if (!next.isEmpty()) {
         if (n > 0) {
-          ackUpdates(next);
+          ackUpdates(Map.of("cursor", next));
         }
         cursor = next;
       }

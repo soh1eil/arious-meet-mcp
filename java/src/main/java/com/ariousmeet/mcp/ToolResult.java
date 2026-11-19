@@ -42,6 +42,31 @@ public final class ToolResult {
     return error;
   }
 
+  /**
+   * The one-line reminder the server adds to {@code get_updates}, {@code read_messages} and {@code
+   * get_message} while Arious Context is on for this agent; null otherwise.
+   */
+  public String contextReminder() {
+    if (structured == null) {
+      return null;
+    }
+    String r = structured.path("context_reminder").asText("");
+    return r.isEmpty() ? null : r;
+  }
+
+  /** The {@code platform_update} items of a {@code get_updates} result. */
+  public List<PlatformUpdate> platformUpdates() {
+    List<PlatformUpdate> out = new java.util.ArrayList<>();
+    if (structured != null) {
+      for (JsonNode u : structured.path("updates")) {
+        if ("platform_update".equals(u.path("kind").asText())) {
+          out.add(PlatformUpdate.from(u));
+        }
+      }
+    }
+    return List.copyOf(out);
+  }
+
   /** Structured content if present, else the text parsed as JSON, else the text. */
   public JsonNode data() {
     if (structured != null) {

@@ -20,7 +20,7 @@ KEYWORDS = {
 RESERVED_METHODS = {
     "wait", "notify", "notifyAll", "getClass", "hashCode", "equals", "toString", "clone", "finalize",
     "initialize", "listTools", "ping", "close", "notifications", "watchUpdates", "uploadBytes",
-    "sendLocalFile", "putBytes", "callTool", "callToolRaw", "setModelName", "builder", "fromEnv",
+    "sendLocalFile", "putBytes", "listPrompts", "getPrompt", "callTool", "callToolRaw", "setModelName", "builder", "fromEnv",
 }
 
 

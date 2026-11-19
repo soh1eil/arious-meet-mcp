@@ -82,6 +82,14 @@ final class MockServer implements AutoCloseable {
         .body();
   }
 
+  void control(String path, String json) throws Exception {
+    HTTP.send(
+        HttpRequest.newBuilder(URI.create(origin + path))
+            .POST(HttpRequest.BodyPublishers.ofString(json))
+            .build(),
+        HttpResponse.BodyHandlers.discarding());
+  }
+
   void push(String token, String itemsJson) throws Exception {
     String body = "{\"token\":\"" + token + "\",\"items\":" + itemsJson + "}";
     HTTP.send(

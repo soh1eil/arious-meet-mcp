@@ -40,17 +40,62 @@ public class McpException extends RuntimeException {
   }
 
   /** The tool ran and answered {@code isError: true}. */
-  public static final class Tool extends McpException {
+  public static class Tool extends McpException {
     private static final long serialVersionUID = 1L;
     private final String tool;
+    private final transient ToolResult result;
 
     public Tool(String message, String tool) {
+      this(message, tool, null);
+    }
+
+    public Tool(String message, String tool, ToolResult result) {
       super(message);
       this.tool = tool;
+      this.result = result;
     }
 
     public String tool() {
       return tool;
+    }
+
+    /** The full refused result (structured content included), or null. */
+    public ToolResult result() {
+      return result;
+    }
+  }
+
+  /**
+   * {@code context_checkpoint} lost a race: someone else wrote a newer version. Merge your changes
+   * into {@link #latest()} and checkpoint again with {@code base_version} set to {@link
+   * #latestVersion()}. It is a {@link Tool}, so existing handlers keep working.
+   */
+  public static final class ContextConflict extends Tool {
+    private static final long serialVersionUID = 1L;
+    private final long baseVersion;
+    private final long latestVersion;
+    private final transient ContextVersion latest;
+
+    public ContextConflict(String message, String tool, ToolResult result, CheckpointResult c) {
+      super(message, tool, result);
+      this.baseVersion = c.baseVersion();
+      this.latestVersion = c.latestVersion();
+      this.latest = c.latest();
+    }
+
+    /** The version you built on. */
+    public long baseVersion() {
+      return baseVersion;
+    }
+
+    /** The version the server holds now. */
+    public long latestVersion() {
+      return latestVersion;
+    }
+
+    /** The latest version's content, or null. */
+    public ContextVersion latest() {
+      return latest;
     }
   }
 
