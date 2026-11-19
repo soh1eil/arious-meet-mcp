@@ -85,7 +85,7 @@ func TestHandshakeListAndTypedCalls(t *testing.T) {
 			ctx := context.Background()
 			c := mk(t, tok(), mode)
 			tools, err := c.ListTools(ctx)
-			if err != nil || len(tools) != 127 {
+			if err != nil || len(tools) != 143 {
 				t.Fatalf("tools=%d err=%v", len(tools), err)
 			}
 			if c.ServerInfo["name"] != "arious-agents" {

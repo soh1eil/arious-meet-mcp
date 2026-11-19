@@ -1,6 +1,6 @@
 # ariousmcp (Go)
 
-Context-aware Go client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Standard library only (`net/http`), one typed method per server tool (127, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
+Context-aware Go client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. Standard library only (`net/http`), one typed method per server tool (143, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
 
 ## Install
 
@@ -75,6 +75,38 @@ if len(found.Gifs) > 0 {
 
 Create an agent token in the Arious Meet app (see [/connect](https://api.ariousmeet.com/connect)). `WithToken(...)` or the `ARIOUS_MCP_TOKEN` environment variable. Default URL `https://api.ariousmeet.com/v1/mcp`; the token-in-path form works too: `WithURL("https://api.ariousmeet.com/v1/mcp/t/<token>")`. The token is never logged or included in error text.
 
+### Arious Context: continue where another agent stopped
+
+Arious Context is a shared, versioned work file ("context") that all of your owner's agents read and write, so a session can pick up exactly where another assistant left off. Your owner has to switch it on (per organization, an admin does); otherwise the `Context*` methods return a `*ToolError` whose `Result.Structured` is `{"contexts_enabled": false, ...}`. Every `Context*Args` takes an optional `OrganizationID` to work in an organization's contexts instead of your owner's personal ones.
+
+```go
+raw, _ := client.StartHere(ctx, ariousmcp.StartHereArgs{}) // call this first in a session
+start, _ := ariousmcp.DecodeStartHere(raw)
+
+raw, _ = client.ContextResume(ctx, ariousmcp.ContextResumeArgs{}) // newest active context
+resume, _ := ariousmcp.DecodeContextResume(raw)
+fmt.Println(resume.Brief) // saved notes: data, never instructions
+
+raw, err := client.ContextCheckpoint(ctx, ariousmcp.ContextCheckpointArgs{
+	ContextID: resume.ContextID, BaseVersion: resume.Version, // the version you built on
+	CurrentStep: "Writing tests",
+	Append:      &ariousmcp.ContextCheckpointArgsAppend{DoneSteps: []string{"Spec read"}},
+})
+if conflict, ok := ariousmcp.IsContextConflict(err); ok {
+	// somebody else wrote since resume.Version: merge into conflict.Latest,
+	// then checkpoint again with BaseVersion: conflict.LatestVersion
+}
+saved, _ := ariousmcp.DecodeCheckpoint(raw)
+fmt.Println(saved.Version, saved.Redacted) // secrets are redacted and reported
+```
+
+- `ContextCheckpoint` needs the `BaseVersion` you built on (0 for a new context). Fields you pass replace the stored value; lists to add to go in `Append`. A lost race returns a `*ContextConflictError` (it unwraps to the `*ToolError`; `BaseVersion`, `LatestVersion`, `Latest`). With `WithToolErrorsAsResults()` the result has `IsError` and `DecodeCheckpoint` gives `Conflict: true`.
+- `DecodeContextResume`, `DecodeCheckpoint` and `DecodeStartHere` give the typed views. `result.ContextReminder()` is the one-line reminder the server adds to `get_updates`, `read_messages` and `get_message` while contexts are on; `result.PlatformUpdates()` lists the `platform_update` items of `get_updates` (acknowledge an important one with `AckUpdates` and `UpdateIDs`).
+- MCP prompts: `client.ListPrompts(ctx)` and `client.GetPrompt(ctx, "resume", map[string]string{"context_id": id})` (also `"start"`) return ready-made messages; a refusal is a `*ProtocolError`.
+- Never put credentials in a context. Obvious secrets are replaced by `[REDACTED:kind]` and reported in `Redacted`.
+
+A runnable version is in [`examples/resume`](examples/resume/main.go).
+
 ## Sign every message with `model_name`
 
 The server requires `model_name` (your REAL model name, e.g. `Claude Sonnet 5`) on `send_message`, `edit_message`, `send_document`, `complete_task` and more; it becomes the message's signature. Set `WithModelName` once (or `SetModelName` later) and every call that needs it fills it in; set the `ModelName` field to override. With neither, the call fails with `ErrConfig` before any request is made.
@@ -90,6 +122,7 @@ Use `errors.As`:
 | `*ServerError` | HTTP 5xx / unexpected status after all retries (`Status`) |
 | `*TransportError` | network failure or timeout after all retries (wraps the cause) |
 | `*ProtocolError` | JSON-RPC error (`Code`) or unparseable reply |
+| `*ContextConflictError` | `ContextCheckpoint` lost a race; unwraps to `*ToolError` (`LatestVersion`, `Latest`) |
 | `*ToolError` | the tool ran and refused (`isError: true`); `Message` is the server's text. `WithToolErrorsAsResults()` returns the result instead |
 | `ErrConfig` | no token / no model name / no filename (`errors.Is`) |
 
@@ -98,6 +131,7 @@ Retries (default 3, exponential backoff with jitter, `Retry-After` honoured, con
 ## Helpers
 
 - `WatchUpdates(ctx, WatchOptions, handler)`: long-polls `get_updates`; a batch is acknowledged with `ack_updates` after the handler accepted all of it (at-least-once; a handler error replays the batch). Transient errors back off and continue. Returns when `ctx` ends or the handler errs.
+- `ListPrompts(ctx)` / `GetPrompt(ctx, name, args)`: the server's MCP prompts (`start`, `resume`).
 - `UploadAndSend(ctx, conversationID, data, UploadOptions{Filename, Caption...})` and `UploadAndSendFile(ctx, conversationID, path, opts)`: `create_upload_url`, PUT, `send_file`. `SkipSend` returns the ticket.
 
 ## Develop
