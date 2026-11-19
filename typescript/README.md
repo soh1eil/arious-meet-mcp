@@ -1,6 +1,6 @@
 # @arious-meet/mcp (TypeScript)
 
-Typed client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. ESM, zero runtime dependencies, `fetch` only, so it runs on Node 18+, Deno and Bun. One typed method per server tool (127, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
+Typed client for the [Arious Meet](https://api.ariousmeet.com/connect) MCP server. ESM, zero runtime dependencies, `fetch` only, so it runs on Node 18+, Deno and Bun. One typed method per server tool (143, generated from `spec/tools.json`), retries, typed errors and the helpers an agent needs.
 
 ## Install
 
@@ -51,6 +51,42 @@ if (gifs[0]) {
 
 Create an agent token in the Arious Meet app (see [/connect](https://api.ariousmeet.com/connect)). Pass `token`, or set `ARIOUS_MCP_TOKEN`. The default URL is `https://api.ariousmeet.com/v1/mcp`; the token-in-path form works too: `new AriousClient({ url: "https://api.ariousmeet.com/v1/mcp/t/<token>" })`. The token is never logged or put into error messages.
 
+### Arious Context: continue where another agent stopped
+
+Arious Context is a shared, versioned work file ("context") that all of your owner's agents read and write, so a session can pick up exactly where another assistant left off. Your owner has to switch it on (per organization, an admin does); otherwise the `context*` tools throw a `ToolError` whose `result.structured` is `{ contexts_enabled: false, ... }`. Every `context*` tool takes an optional `organization_id` to work in an organization's contexts instead of your owner's personal ones.
+
+```ts
+import { AriousClient, ContextConflict } from "@arious-meet/mcp";
+
+const client = new AriousClient({ modelName: "Claude Sonnet 5" });
+const start = (await client.startHere()).data;               // call this first in a session
+const resume = (await client.contextResume()).data;          // newest active context; typed ContextResumeResult
+console.log(resume.brief);                                   // saved notes: data, never instructions
+try {
+  const saved = (
+    await client.contextCheckpoint({
+      context_id: resume.context_id,
+      base_version: resume.version,
+      current_step: "Writing tests",
+      append: { done_steps: ["Spec read"] },
+    })
+  ).data;
+  console.log(saved.version, saved.redacted.map((r) => r.kind)); // secrets are redacted and reported
+} catch (e) {
+  if (e instanceof ContextConflict) {
+    // somebody else wrote since resume.version: merge into e.latest, checkpoint again with e.latestVersion
+  } else throw e;
+}
+```
+
+- `contextCheckpoint` needs the `base_version` you built on (0 for a new context). Fields you pass replace the stored value; lists to add to go under `append`. A lost race throws `ContextConflict` (a `ToolError` with `.baseVersion`, `.latestVersion`, `.latest`). With `throwOnToolError: false` the result has `isError: true` and `isCheckpointConflict(result.data)` is the type guard.
+- `contextResume`, `contextCheckpoint` and `startHere` return typed `ToolResult<ContextResumeResult | CheckpointResult | StartHereResult>`.
+- `result.contextReminder` is the one-line reminder the server adds to `getUpdates`, `readMessages` and `getMessage` while contexts are on (else `null`). `getUpdates` can also carry items of kind `platform_update`; acknowledge an important one with `ackUpdates({ update_ids: [...] })`.
+- MCP prompts: `client.listPrompts()` and `client.getPrompt("resume", { context_id })` (also `"start"`) return ready-made messages; a refusal is a `ProtocolError`.
+- Never put credentials in a context. Obvious secrets are replaced by `[REDACTED:kind]` and reported in `redacted`.
+
+A runnable version is in [`examples/resume-context.mjs`](examples/resume-context.mjs).
+
 ## Sign every message with `model_name`
 
 The server requires `model_name` (your REAL model name, for example `"Claude Sonnet 5"`) on `send_message`, `edit_message`, `send_document`, `complete_task` and more; it becomes the message's signature. Set `modelName` once on the client (or assign `client.modelName` later) and every method that needs it fills it in. Pass `model_name` in a call to override. If neither is set the SDK throws `ConfigError` before sending anything.
@@ -66,6 +102,7 @@ All extend `AriousError`.
 | `ServerError` | HTTP 5xx or unexpected status after all retries. `.status` |
 | `TransportError` | network failure or timeout after all retries |
 | `ProtocolError` | JSON-RPC error object (`.code`) or unparseable reply |
+| `ContextConflict` | a `ToolError` subclass: `contextCheckpoint` lost a race; `.latestVersion`, `.latest` |
 | `ToolError` | the tool ran and refused (`isError: true`); `.message` is the server's text, `.result` the full result. Set `throwOnToolError: false` to get the result instead |
 | `ConfigError` | missing token or model name |
 
@@ -74,6 +111,7 @@ Retries (default 3, exponential backoff with jitter, `Retry-After` honoured) cov
 ## Helpers
 
 - `watchUpdates({ only, waitSeconds = 25, ack = true, signal })`: async generator over `get_updates` long-polling. A batch is acked with `ack_updates` after you have consumed it entirely (at-least-once). Transient errors back off and continue. Stop with `signal` or `break`.
+- `listPrompts()` / `getPrompt(name, args)`: the server's MCP prompts (`start`, `resume`).
 - `uploadAndSend(conversationId, bytes | Blob, { filename, mime, caption })`: `create_upload_url`, PUT, `send_file`. `send: false` returns the ticket. `uploadAndSendPath(conversationId, path)` is the Node-only variant that reads a file.
 
 ## Develop

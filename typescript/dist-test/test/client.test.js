@@ -19,7 +19,7 @@ describe("client", () => {
     for (const mode of ["json", "sse"]) {
         it(`handshake, list and typed calls (${mode})`, async () => {
             const c = mk(token(), mode);
-            assert.equal((await c.listTools()).length, 127);
+            assert.equal((await c.listTools()).length, 143);
             assert.equal(c.serverInfo.name, "arious-agents");
             assert.equal((await c.whoami()).data.display_name, "Mock Agent");
             assert.equal((await c.listOrganizations()).data.organizations[0].id, "org-1");

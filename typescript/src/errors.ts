@@ -1,3 +1,5 @@
+import type { CheckpointConflict, ContextVersion } from "./types.js";
+
 /** Base class of every error this SDK throws. */
 export class AriousError extends Error {
   constructor(message: string) {
@@ -51,5 +53,21 @@ export class ToolError extends AriousError {
     public readonly result: unknown = null,
   ) {
     super(message);
+  }
+}
+
+/**
+ * `contextCheckpoint` lost a race: someone else wrote a newer version. Merge your changes into
+ * `latest` and checkpoint again with `base_version: error.latestVersion`.
+ */
+export class ContextConflict extends ToolError {
+  readonly baseVersion: number;
+  readonly latestVersion: number;
+  readonly latest: ContextVersion | null;
+  constructor(message: string, body: CheckpointConflict, result: unknown = null) {
+    super(message, result);
+    this.baseVersion = body.base_version;
+    this.latestVersion = body.latest_version;
+    this.latest = body.latest ?? null;
   }
 }

@@ -2,6 +2,7 @@ import {
   AriousError,
   AuthError,
   ConfigError,
+  ContextConflict,
   ProtocolError,
   RateLimitError,
   ServerError,
@@ -9,11 +10,18 @@ import {
   TransportError,
 } from "./errors.js";
 import { GeneratedTools, TOOL_META } from "./generated.js";
-import type { ClientOptions, ToolResult } from "./types.js";
+import {
+  type CheckpointConflict,
+  type ClientOptions,
+  type Prompt,
+  type PromptResult,
+  type ToolResult,
+  isCheckpointConflict,
+} from "./types.js";
 
 export const DEFAULT_URL = "https://api.ariousmeet.com/v1/mcp";
 const PROTOCOL_VERSION = "2025-06-18";
-const SDK = "arious-meet-mcp-ts/0.2.0";
+const SDK = "arious-meet-mcp-ts/0.3.0";
 
 type Json = any;
 
@@ -92,7 +100,9 @@ function toToolResult(raw: Json): ToolResult {
       data = text;
     }
   }
-  return { text, structured, content, isError: !!raw.isError, data };
+  const reminder = structured?.context_reminder;
+  const contextReminder = typeof reminder === "string" && reminder ? reminder : null;
+  return { text, structured, content, isError: !!raw.isError, contextReminder, data };
 }
 
 function uuid(): string {
@@ -256,6 +266,33 @@ export class AriousClient extends GeneratedTools {
     return r?.tools ?? [];
   }
 
+  /** List the MCP prompts the server offers (`start` and `resume`). */
+  async listPrompts(): Promise<Prompt[]> {
+    await this.ensureInitialized();
+    const r = await this.rpc("prompts/list");
+    return r?.prompts ?? [];
+  }
+
+  /**
+   * Fetch a prompt as ready-made messages, e.g. `getPrompt("resume", { context_id })`.
+   * A refusal (unknown prompt, contexts off, nothing to resume) is a ProtocolError.
+   */
+  async getPrompt(name: string, args: Record<string, string> = {}): Promise<PromptResult> {
+    await this.ensureInitialized();
+    const params: Record<string, unknown> = { name };
+    if (Object.keys(args).length) params.arguments = args;
+    const r = await this.rpc("prompts/get", params);
+    const messages = (Array.isArray(r?.messages) ? r.messages : []).map((m: Json) => ({
+      role: String(m?.role ?? "user"),
+      text: typeof m?.content === "object" && m.content ? String(m.content.text ?? "") : String(m?.content ?? ""),
+    }));
+    return {
+      description: String(r?.description ?? ""),
+      messages,
+      text: messages.map((m: { text: string }) => m.text).join("\n"),
+    };
+  }
+
   async ping(): Promise<void> {
     await this.ensureInitialized();
     await this.rpc("ping");
@@ -282,7 +319,12 @@ export class AriousClient extends GeneratedTools {
     await this.ensureInitialized();
     const result = await this.rpc("tools/call", { name, arguments: a }, (s) => this.canRetry(name, a, s), opts.signal);
     const res = toToolResult(result);
-    if (res.isError && this.throwOnToolError) throw new ToolError(res.text || "tool error", res);
+    if (res.isError && this.throwOnToolError) {
+      if (isCheckpointConflict(res.structured)) {
+        throw new ContextConflict(res.text || "context conflict", res.structured as CheckpointConflict, res);
+      }
+      throw new ToolError(res.text || "tool error", res);
+    }
     return res;
   }
 
